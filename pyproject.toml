@@ -9,7 +9,7 @@ description = "Unofficial agent-friendly CLI for self-hosted Confluence and Jira
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
-  { name = "Daehwan + Codex" }
+  { name = "quanttraderkim" }
 ]
 dependencies = []
 
