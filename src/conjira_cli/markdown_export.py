@@ -9,6 +9,57 @@ from datetime import datetime
 from typing import Any
 
 
+_STRUCTURED_TABLE_KEY_HEADERS = {
+    "category",
+    "component",
+    "feature",
+    "field",
+    "flow",
+    "group",
+    "item",
+    "label",
+    "name",
+    "option",
+    "screen",
+    "section",
+    "setting",
+    "step",
+    "title",
+    "구분",
+    "기능",
+    "단계",
+    "명칭",
+    "분류",
+    "설정",
+    "섹션",
+    "순서",
+    "옵션",
+    "이름",
+    "항목명",
+    "카테고리",
+    "컴포넌트",
+    "타이틀",
+    "항목",
+    "화면",
+    "흐름",
+    "필드",
+}
+
+_STRUCTURED_TABLE_CONTENT_HEADERS = {
+    "content",
+    "definition",
+    "description",
+    "detail",
+    "details",
+    "overview",
+    "summary",
+    "내용",
+    "상세",
+    "설명",
+    "요약",
+}
+
+
 def _local_name(tag: str) -> str:
     if "}" in tag:
         return tag.split("}", 1)[1]
@@ -42,6 +93,13 @@ def _join_inline_pieces(pieces: list[str]) -> str:
     joined = joined.replace("\n ", "\n")
     joined = joined.replace(" \n", "\n")
     return joined.strip()
+
+
+def _normalize_table_header(value: str) -> str:
+    value = _collapse_inline(value).lower()
+    value = value.strip(":：")
+    value = re.sub(r"\s+", " ", value)
+    return value
 
 
 @dataclass
@@ -274,14 +332,12 @@ class MarkdownExporter:
     def _is_structured_table(headers: list[str]) -> bool:
         if len(headers) < 2:
             return False
-        normalized = tuple(header.strip().lower() for header in headers[:2])
-        return normalized in {
-            ("구분", "내용"),
-            ("section", "content"),
-            ("item", "content"),
-            ("label", "content"),
-            ("category", "content"),
-        }
+        first = _normalize_table_header(headers[0])
+        second = _normalize_table_header(headers[1])
+        return (
+            first in _STRUCTURED_TABLE_KEY_HEADERS
+            and second in _STRUCTURED_TABLE_CONTENT_HEADERS
+        )
 
     def _render_structured_table(
         self,
