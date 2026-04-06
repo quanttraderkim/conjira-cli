@@ -20,10 +20,11 @@ from conjira_cli.config import (
 )
 from conjira_cli.inline_comments import render_inline_comment_summary_markdown
 from conjira_cli.markdown_export import MarkdownExporter
+from conjira_cli.markdown_import import markdown_to_storage_html
 
 
 def _read_text_arg(raw_text: Optional[str], file_path: Optional[str]) -> str:
-    if raw_text:
+    if raw_text is not None:
         return raw_text
     if file_path:
         return Path(file_path).read_text(encoding="utf-8")
@@ -31,11 +32,33 @@ def _read_text_arg(raw_text: Optional[str], file_path: Optional[str]) -> str:
 
 
 def _read_json_arg(raw_json: Optional[str], file_path: Optional[str]) -> Dict[str, Any]:
-    if raw_json:
+    if raw_json is not None:
         return json.loads(raw_json)
     if file_path:
         return json.loads(Path(file_path).read_text(encoding="utf-8"))
     return {}
+
+
+def _read_confluence_body_arg(
+    raw_html: Optional[str],
+    html_file: Optional[str],
+    raw_markdown: Optional[str],
+    markdown_file: Optional[str],
+) -> str:
+    if raw_html is not None or html_file is not None:
+        return _read_text_arg(raw_html, html_file)
+    return markdown_to_storage_html(_read_text_arg(raw_markdown, markdown_file))
+
+
+def _read_optional_confluence_body_arg(
+    raw_html: Optional[str],
+    html_file: Optional[str],
+    raw_markdown: Optional[str],
+    markdown_file: Optional[str],
+) -> Optional[str]:
+    if all(value is None for value in [raw_html, html_file, raw_markdown, markdown_file]):
+        return None
+    return _read_confluence_body_arg(raw_html, html_file, raw_markdown, markdown_file)
 
 
 def _sanitize_markdown_filename(title: str) -> str:
@@ -206,15 +229,23 @@ def _build_parser() -> argparse.ArgumentParser:
     create_page_body_group = create_page.add_mutually_exclusive_group(required=True)
     create_page_body_group.add_argument("--body-html")
     create_page_body_group.add_argument("--body-file")
+    create_page_body_group.add_argument("--body-markdown")
+    create_page_body_group.add_argument("--body-markdown-file")
 
     update_page = subparsers.add_parser("update-page", help="Update an existing Confluence page")
     update_page.add_argument("--page-id", required=True)
     update_page.add_argument("--allow-write", action="store_true")
     update_page.add_argument("--title")
-    update_page.add_argument("--body-html")
-    update_page.add_argument("--body-file")
-    update_page.add_argument("--append-html")
-    update_page.add_argument("--append-file")
+    update_page_body_group = update_page.add_mutually_exclusive_group()
+    update_page_body_group.add_argument("--body-html")
+    update_page_body_group.add_argument("--body-file")
+    update_page_body_group.add_argument("--body-markdown")
+    update_page_body_group.add_argument("--body-markdown-file")
+    update_page_append_group = update_page.add_mutually_exclusive_group()
+    update_page_append_group.add_argument("--append-html")
+    update_page_append_group.add_argument("--append-file")
+    update_page_append_group.add_argument("--append-markdown")
+    update_page_append_group.add_argument("--append-markdown-file")
 
     upload_attachment = subparsers.add_parser(
         "upload-attachment",
@@ -487,7 +518,12 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             allowed_space_keys=settings.allowed_space_keys,
             allowed_parent_ids=settings.allowed_parent_ids,
         )
-        body_html = _read_text_arg(args.body_html, args.body_file)
+        body_html = _read_confluence_body_arg(
+            args.body_html,
+            args.body_file,
+            args.body_markdown,
+            args.body_markdown_file,
+        )
         page = client.create_page(
             space_key=args.space_key,
             parent_id=args.parent_id,
@@ -501,19 +537,21 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             page_id=args.page_id,
             allowed_page_ids=settings.allowed_page_ids,
         )
-        new_body_html = (
-            _read_text_arg(args.body_html, args.body_file)
-            if (args.body_html or args.body_file)
-            else None
+        new_body_html = _read_optional_confluence_body_arg(
+            args.body_html,
+            args.body_file,
+            args.body_markdown,
+            args.body_markdown_file,
         )
-        append_html = (
-            _read_text_arg(args.append_html, args.append_file)
-            if (args.append_html or args.append_file)
-            else None
+        append_html = _read_optional_confluence_body_arg(
+            args.append_html,
+            args.append_file,
+            args.append_markdown,
+            args.append_markdown_file,
         )
         if new_body_html is None and append_html is None and args.title is None:
             raise ConfigError(
-                "update-page requires at least one of --title, --body-html/--body-file, or --append-html/--append-file."
+                "update-page requires at least one of --title, --body-html/--body-file, --body-markdown/--body-markdown-file, --append-html/--append-file, or --append-markdown/--append-markdown-file."
             )
         page = client.update_page(
             page_id=args.page_id,

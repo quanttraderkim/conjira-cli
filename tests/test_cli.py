@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 
 from conjira_cli.cli import (
+    _read_confluence_body_arg,
+    _read_optional_confluence_body_arg,
     _read_export_metadata,
     _resolve_export_output_path,
     _sanitize_markdown_filename,
@@ -100,3 +102,38 @@ class CliTests(unittest.TestCase):
 
             with self.assertRaises(ConfigError):
                 _read_export_metadata(path)
+
+    def test_read_confluence_body_arg_converts_markdown(self) -> None:
+        result = _read_confluence_body_arg(
+            raw_html=None,
+            html_file=None,
+            raw_markdown="# Demo\n\n- Item A",
+            markdown_file=None,
+        )
+
+        self.assertIn("<h1>Demo</h1>", result)
+        self.assertIn("<ul><li>Item A</li></ul>", result)
+
+    def test_read_confluence_body_arg_reads_html_file_without_conversion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "body.html"
+            path.write_text("<p>Ready HTML</p>", encoding="utf-8")
+
+            result = _read_confluence_body_arg(
+                raw_html=None,
+                html_file=str(path),
+                raw_markdown=None,
+                markdown_file=None,
+            )
+
+        self.assertEqual(result, "<p>Ready HTML</p>")
+
+    def test_read_optional_confluence_body_arg_returns_none_when_missing(self) -> None:
+        self.assertIsNone(
+            _read_optional_confluence_body_arg(
+                raw_html=None,
+                html_file=None,
+                raw_markdown=None,
+                markdown_file=None,
+            )
+        )

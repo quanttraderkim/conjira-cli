@@ -16,9 +16,10 @@ If your team uses self-hosted Confluence and Jira, official cloud-native connect
 
 - read Confluence pages and search with CQL
 - export Confluence pages to Markdown for tools such as Obsidian
+- create or update Confluence pages from either storage HTML or Markdown
 - detect stale Markdown exports and refresh them from the live page
 - fetch and export grouped Confluence inline comment threads
-- create or update Confluence pages and upload attachments
+- upload attachments to Confluence pages
 - read Jira issues, search with JQL, inspect create metadata, create issues, and add comments
 - enforce write safety with `--allow-write` plus optional allowlists
 
@@ -39,6 +40,12 @@ Export a Confluence page to Markdown:
 
 ```bash
 ./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
+```
+
+Create a Confluence page directly from Markdown:
+
+```bash
+./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
 ```
 
 Check whether an exported file is stale and refresh it if the live page changed:
@@ -174,6 +181,13 @@ Create or update a Confluence page:
 ./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-html "<p>Updated by conjira</p>"
 ```
 
+Create or update a Confluence page from Markdown:
+
+```bash
+./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown "# Demo\n\n- Item A"
+./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
+```
+
 Search Jira and fetch an issue:
 
 ```bash
@@ -234,6 +248,12 @@ For stronger guardrails, define write allowlists in `local/agent.env`. If `CONFL
 Use `local/` only for machine-local config, temporary files, and staging artifacts. Final Markdown exports should usually go into your real work folder, for example an Obsidian vault, not into the CLI repository itself.
 
 The recommended pattern is to set `CONFLUENCE_EXPORT_DEFAULT_DIR` to an inbox or work folder, keep `CONFLUENCE_EXPORT_STAGING_DIR` pointed at `local/exports`, use `--output-dir` when the final destination is already known, and use `--staging-local` only when you want a short-lived preview.
+
+## Markdown import notes
+
+Markdown upload is a best-effort conversion to Confluence storage HTML. It works well for common headings, paragraphs, lists, blockquotes, fenced code blocks, tables, links, images, and simple Obsidian-style wikilinks. It is not a perfect round-trip for complex Confluence macros, merged tables, or deeply nested layouts, so treat Markdown import as a practical authoring path rather than a lossless document converter.
+
+Use `--body-file` and `--append-file` only for storage HTML files. If your source file is Markdown, use `--body-markdown-file` or `--append-markdown-file` so the CLI converts it before upload.
 
 ## Agent usage
 

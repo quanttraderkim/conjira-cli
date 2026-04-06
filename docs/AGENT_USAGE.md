@@ -95,10 +95,22 @@ Create a Confluence page under the approved parent:
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Agent Test" --body-html "<p>Created by agent.</p>"
 ```
 
+Create a Confluence page from Markdown:
+
+```bash
+./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file "/path/to/page.md"
+```
+
 Update an approved Confluence page:
 
 ```bash
 ./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-html "<p>Updated by agent.</p>"
+```
+
+Update an approved Confluence page from Markdown:
+
+```bash
+./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file "/path/to/update.md"
 ```
 
 Upload or refresh a Confluence attachment:
@@ -144,6 +156,8 @@ Add a Jira comment:
 - This project does not implement delete commands.
 - Write commands require `--allow-write`.
 - If `CONFLUENCE_ALLOWED_*` or `JIRA_ALLOWED_*` values are set, treat them as hard safety boundaries rather than suggestions.
+- Markdown upload is a best-effort conversion to Confluence storage HTML. Prefer it for common text-first pages, not for macro-heavy round-trips.
+- `--body-file` and `--append-file` are for storage HTML files. Use `--body-markdown-file` or `--append-markdown-file` for Markdown inputs.
 
 ## Local setup
 
