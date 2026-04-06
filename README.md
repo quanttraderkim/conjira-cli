@@ -8,6 +8,8 @@ Korean version: [README.ko.md](README.ko.md)
 
 This repository is intentionally sanitized for sharing. It does not include real company URLs, PATs, project keys, page IDs, issue keys, or exported workspace data.
 
+You do not need to be a Python developer to get value from this repository. If you already use a local coding agent such as Codex, Claude Code, or another shell-capable agent, you can hand the repo to the agent, point it at your local `agent.env`, and ask for tasks like “export this Confluence page to Markdown”, “refresh this stale wiki note”, or “search Jira for issues created this week”. The agent can read this README, follow `docs/AGENT_USAGE.md`, and run the CLI for you.
+
 ## The problem this solves
 
 If your team uses self-hosted Confluence and Jira, official cloud-native connectors are often not enough. You still have the REST APIs, but the missing piece is usually a reusable local tool that makes those APIs easy to use from a shell or from local coding agents.
