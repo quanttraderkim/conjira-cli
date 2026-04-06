@@ -23,7 +23,7 @@ If your team uses self-hosted Confluence and Jira, official cloud-native connect
 - fetch and export grouped Confluence inline comment threads
 - upload attachments to Confluence pages
 - read Jira issues, search with JQL, inspect create metadata, create issues, and add comments
-- enforce write safety with `--allow-write` plus optional allowlists
+- preview writes with `--dry-run`, then enforce them with `--allow-write` plus optional allowlists
 
 ## Who this is for
 
@@ -48,6 +48,13 @@ Create a Confluence page directly from Markdown:
 
 ```bash
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
+```
+
+Preview a write without changing anything:
+
+```bash
+./bin/conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
+./bin/conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
 ```
 
 Check whether an exported file is stale and refresh it if the live page changed:
@@ -222,6 +229,13 @@ Create or update a Confluence page from Markdown:
 ./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
 ```
 
+Preview a Confluence or Jira write first:
+
+```bash
+./bin/conjira --env-file ./local/agent.env update-page --dry-run --page-id 100002 --append-markdown-file ./notes/update.md
+./bin/conjira --env-file ./local/agent.env jira-create-issue --dry-run --project-key DEMO --issue-type-name Task --summary "Preview issue" --description "No write yet"
+```
+
 Search Jira and fetch an issue:
 
 ```bash
@@ -273,7 +287,7 @@ Jira settings:
 
 This CLI intentionally does not implement delete commands for Confluence pages or Jira issues.
 
-All write commands require `--allow-write`. That means a copied read command does not mutate Confluence or Jira unless the caller explicitly opts in.
+Write commands either require `--allow-write`, or `--dry-run` when you only want a preview. That means a copied read command does not mutate Confluence or Jira unless the caller explicitly opts in.
 
 For stronger guardrails, define write allowlists in `local/agent.env`. If `CONFLUENCE_ALLOWED_*` or `JIRA_ALLOWED_*` values are set, writes fail closed outside the approved spaces, parents, pages, projects, or issue keys even if the PAT itself has broader permissions.
 

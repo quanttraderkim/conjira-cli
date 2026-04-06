@@ -23,7 +23,7 @@ English version: [README.md](README.md)
 - Confluence 인라인 코멘트 스레드 조회 및 Markdown export
 - Confluence 첨부파일 업로드
 - Jira 이슈 조회, JQL 검색, create metadata 조회, 이슈 생성, 댓글 추가
-- `--allow-write`와 allowlist 기반의 쓰기 안전장치
+- `--dry-run` 미리보기 후 `--allow-write`와 allowlist 기반의 쓰기 안전장치
 
 ## 누가 쓰면 좋나요
 
@@ -48,6 +48,13 @@ Markdown 파일로 Confluence 페이지 생성:
 
 ```bash
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
+```
+
+실제로 쓰기 전에 preview만 확인:
+
+```bash
+./bin/conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
+./bin/conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
 ```
 
 기존 export가 오래됐는지 확인하고 최신 위키 내용으로 갱신:
@@ -222,6 +229,13 @@ Markdown으로 Confluence 페이지 생성 및 수정:
 ./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
 ```
 
+Confluence나 Jira 쓰기 작업을 먼저 preview:
+
+```bash
+./bin/conjira --env-file ./local/agent.env update-page --dry-run --page-id 100002 --append-markdown-file ./notes/update.md
+./bin/conjira --env-file ./local/agent.env jira-create-issue --dry-run --project-key DEMO --issue-type-name Task --summary "Preview issue" --description "No write yet"
+```
+
 Jira 검색과 이슈 조회:
 
 ```bash
@@ -273,7 +287,7 @@ Jira 관련 설정:
 
 이 CLI는 Confluence 페이지나 Jira 이슈 삭제 명령을 의도적으로 포함하지 않습니다.
 
-모든 쓰기 명령은 `--allow-write`를 요구합니다. 즉 읽기 명령을 복사했다고 해서 실수로 변경이 일어나지 않습니다.
+쓰기 명령은 실제 반영 시 `--allow-write`, 미리보기만 할 때는 `--dry-run`을 사용합니다. 즉 읽기 명령을 복사했다고 해서 실수로 변경이 일어나지 않습니다.
 
 더 강한 안전장치가 필요하면 `local/agent.env`에 allowlist를 넣으면 됩니다. `CONFLUENCE_ALLOWED_*`나 `JIRA_ALLOWED_*`가 설정되어 있으면, PAT 자체 권한이 더 넓더라도 허용된 공간과 대상 밖으로는 쓰기가 차단됩니다.
 

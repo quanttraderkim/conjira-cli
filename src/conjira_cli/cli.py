@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import mimetypes
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -59,6 +61,34 @@ def _read_optional_confluence_body_arg(
     if all(value is None for value in [raw_html, html_file, raw_markdown, markdown_file]):
         return None
     return _read_confluence_body_arg(raw_html, html_file, raw_markdown, markdown_file)
+
+
+def _truncate_preview(value: str, limit: int = 240) -> str:
+    value = value.strip()
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1].rstrip() + "…"
+
+
+def _preview_text(value: Optional[str], limit: int = 240) -> Optional[str]:
+    if value is None:
+        return None
+    collapsed = re.sub(r"\s+", " ", value).strip()
+    if not collapsed:
+        return None
+    return _truncate_preview(collapsed, limit=limit)
+
+
+def _preview_html(value: Optional[str], limit: int = 240) -> Optional[str]:
+    if value is None:
+        return None
+    preview = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
+    preview = re.sub(r"</p\s*>", "\n\n", preview, flags=re.IGNORECASE)
+    preview = re.sub(r"<li[^>]*>", "- ", preview, flags=re.IGNORECASE)
+    preview = re.sub(r"</li\s*>", "\n", preview, flags=re.IGNORECASE)
+    preview = re.sub(r"<[^>]+>", " ", preview)
+    preview = html.unescape(preview).replace("\xa0", " ")
+    return _preview_text(preview, limit=limit)
 
 
 def _sanitize_markdown_filename(title: str) -> str:
@@ -226,6 +256,7 @@ def _build_parser() -> argparse.ArgumentParser:
     create_page.add_argument("--parent-id")
     create_page.add_argument("--title", required=True)
     create_page.add_argument("--allow-write", action="store_true")
+    create_page.add_argument("--dry-run", action="store_true")
     create_page_body_group = create_page.add_mutually_exclusive_group(required=True)
     create_page_body_group.add_argument("--body-html")
     create_page_body_group.add_argument("--body-file")
@@ -235,6 +266,7 @@ def _build_parser() -> argparse.ArgumentParser:
     update_page = subparsers.add_parser("update-page", help="Update an existing Confluence page")
     update_page.add_argument("--page-id", required=True)
     update_page.add_argument("--allow-write", action="store_true")
+    update_page.add_argument("--dry-run", action="store_true")
     update_page.add_argument("--title")
     update_page_body_group = update_page.add_mutually_exclusive_group()
     update_page_body_group.add_argument("--body-html")
@@ -255,6 +287,7 @@ def _build_parser() -> argparse.ArgumentParser:
     upload_attachment.add_argument("--file", required=True)
     upload_attachment.add_argument("--comment")
     upload_attachment.add_argument("--allow-write", action="store_true")
+    upload_attachment.add_argument("--dry-run", action="store_true")
     upload_attachment.add_argument("--major-edit", action="store_true")
 
     confluence_search = subparsers.add_parser("search", help="Search Confluence with CQL")
@@ -290,6 +323,7 @@ def _build_parser() -> argparse.ArgumentParser:
     jira_create_issue.add_argument("--summary", required=True)
     jira_create_issue.add_argument("--issue-type-name", required=True)
     jira_create_issue.add_argument("--allow-write", action="store_true")
+    jira_create_issue.add_argument("--dry-run", action="store_true")
     jira_create_issue_description_group = jira_create_issue.add_mutually_exclusive_group()
     jira_create_issue_description_group.add_argument("--description")
     jira_create_issue_description_group.add_argument("--description-file")
@@ -300,6 +334,7 @@ def _build_parser() -> argparse.ArgumentParser:
     jira_add_comment = subparsers.add_parser("jira-add-comment", help="Add a Jira issue comment")
     jira_add_comment.add_argument("--issue-key", required=True)
     jira_add_comment.add_argument("--allow-write", action="store_true")
+    jira_add_comment.add_argument("--dry-run", action="store_true")
     jira_comment_group = jira_add_comment.add_mutually_exclusive_group(required=True)
     jira_comment_group.add_argument("--body")
     jira_comment_group.add_argument("--body-file")
@@ -307,9 +342,9 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _require_allow_write(allow_write: bool) -> None:
-    if not allow_write:
-        raise ConfigError("Write commands require --allow-write.")
+def _require_write_intent(allow_write: bool, dry_run: bool) -> None:
+    if not allow_write and not dry_run:
+        raise ConfigError("Write commands require --allow-write or --dry-run.")
 
 
 def _assert_confluence_create_allowed(
@@ -363,6 +398,150 @@ def _assert_jira_issue_allowed(
         raise ConfigError(
             "Write blocked: issue key {0} is not in JIRA_ALLOWED_ISSUE_KEYS.".format(issue_key)
         )
+
+
+def _confluence_create_preview(
+    *,
+    space_key: str,
+    parent_id: Optional[str],
+    title: str,
+    body_html: str,
+    body_source: str,
+) -> Dict[str, Any]:
+    return {
+        "dry_run": True,
+        "product": "confluence",
+        "action": "create-page",
+        "space_key": space_key,
+        "parent_id": parent_id,
+        "title": title,
+        "body_source": body_source,
+        "body_length": len(body_html),
+        "body_preview": _preview_html(body_html),
+    }
+
+
+def _confluence_body_source(
+    *,
+    raw_html: Optional[str],
+    html_file: Optional[str],
+    raw_markdown: Optional[str],
+    markdown_file: Optional[str],
+) -> Optional[str]:
+    if raw_html is not None or html_file is not None:
+        return "storage_html"
+    if raw_markdown is not None or markdown_file is not None:
+        return "markdown"
+    return None
+
+
+def _confluence_update_preview(
+    *,
+    page: Dict[str, Any],
+    new_title: Optional[str],
+    new_body_html: Optional[str],
+    append_html: Optional[str],
+    body_source: Optional[str],
+    append_source: Optional[str],
+) -> Dict[str, Any]:
+    current_summary = ConfluenceClient.summarize_page(page)
+    current_body = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
+    resulting_body = new_body_html if new_body_html is not None else current_body
+    if append_html:
+        resulting_body += append_html
+
+    next_title = new_title or current_summary.get("title")
+    return {
+        "dry_run": True,
+        "product": "confluence",
+        "action": "update-page",
+        "page_id": current_summary.get("id"),
+        "space_key": current_summary.get("space_key"),
+        "source_url": current_summary.get("webui_url"),
+        "current_version": current_summary.get("version"),
+        "current_title": current_summary.get("title"),
+        "next_title": next_title,
+        "title_changed": next_title != current_summary.get("title"),
+        "body_replaced": new_body_html is not None,
+        "body_appended": append_html is not None,
+        "body_source": body_source,
+        "append_source": append_source,
+        "current_body_length": len(current_body),
+        "next_body_length": len(resulting_body),
+        "body_preview": _preview_html(resulting_body),
+    }
+
+
+def _confluence_attachment_preview(
+    *,
+    page_id: str,
+    file_path: Path,
+    content_type: str,
+    comment: Optional[str],
+    minor_edit: bool,
+    existing_attachment: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    summary = (
+        ConfluenceClient.summarize_attachment(existing_attachment)
+        if existing_attachment is not None
+        else None
+    )
+    return {
+        "dry_run": True,
+        "product": "confluence",
+        "action": "upload-attachment",
+        "page_id": page_id,
+        "file_name": file_path.name,
+        "file_size": file_path.stat().st_size,
+        "content_type": content_type,
+        "comment": comment,
+        "minor_edit": minor_edit,
+        "mode": "replace" if existing_attachment is not None else "create",
+        "existing_attachment": summary,
+    }
+
+
+def _jira_create_issue_preview(
+    *,
+    client: JiraClient,
+    project_key: str,
+    summary: str,
+    issue_type_name: str,
+    description: Optional[str],
+    extra_fields: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "dry_run": True,
+        "product": "jira",
+        "action": "jira-create-issue",
+        "project_key": project_key,
+        "summary": summary,
+        "issue_type_name": issue_type_name,
+        "description_preview": _preview_text(description),
+        "description_length": len(description) if description is not None else 0,
+        "extra_field_keys": sorted(extra_fields.keys()),
+        "project_browse_url": "{0}/projects/{1}".format(client.base_url.rstrip("/"), project_key),
+    }
+
+
+def _jira_comment_preview(
+    *,
+    issue: Dict[str, Any],
+    comment_body: str,
+    client: JiraClient,
+) -> Dict[str, Any]:
+    summary = client.summarize_issue(issue)
+    return {
+        "dry_run": True,
+        "product": "jira",
+        "action": "jira-add-comment",
+        "issue_key": summary.get("key"),
+        "issue_summary": summary.get("summary"),
+        "issue_status": summary.get("status"),
+        "browse_url": summary.get("browse_url"),
+        "comment_length": len(comment_body),
+        "comment_preview": _preview_text(comment_body),
+    }
 
 
 def _render_text(payload: Dict[str, Any]) -> str:
@@ -511,7 +690,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             ),
         }
     if args.command == "create-page":
-        _require_allow_write(args.allow_write)
+        _require_write_intent(args.allow_write, args.dry_run)
         _assert_confluence_create_allowed(
             space_key=args.space_key,
             parent_id=args.parent_id,
@@ -524,6 +703,20 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             args.body_markdown,
             args.body_markdown_file,
         )
+        body_source = _confluence_body_source(
+            raw_html=args.body_html,
+            html_file=args.body_file,
+            raw_markdown=args.body_markdown,
+            markdown_file=args.body_markdown_file,
+        )
+        if args.dry_run:
+            return _confluence_create_preview(
+                space_key=args.space_key,
+                parent_id=args.parent_id,
+                title=args.title,
+                body_html=body_html,
+                body_source=body_source or "unknown",
+            )
         page = client.create_page(
             space_key=args.space_key,
             parent_id=args.parent_id,
@@ -532,7 +725,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         )
         return client.summarize_page(page)
     if args.command == "update-page":
-        _require_allow_write(args.allow_write)
+        _require_write_intent(args.allow_write, args.dry_run)
         _assert_confluence_update_allowed(
             page_id=args.page_id,
             allowed_page_ids=settings.allowed_page_ids,
@@ -553,6 +746,26 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             raise ConfigError(
                 "update-page requires at least one of --title, --body-html/--body-file, --body-markdown/--body-markdown-file, --append-html/--append-file, or --append-markdown/--append-markdown-file."
             )
+        if args.dry_run:
+            page = client.get_page(args.page_id, expand="body.storage,version,space")
+            return _confluence_update_preview(
+                page=page,
+                new_title=args.title,
+                new_body_html=new_body_html,
+                append_html=append_html,
+                body_source=_confluence_body_source(
+                    raw_html=args.body_html,
+                    html_file=args.body_file,
+                    raw_markdown=args.body_markdown,
+                    markdown_file=args.body_markdown_file,
+                ),
+                append_source=_confluence_body_source(
+                    raw_html=args.append_html,
+                    html_file=args.append_file,
+                    raw_markdown=args.append_markdown,
+                    markdown_file=args.append_markdown_file,
+                ),
+            )
         page = client.update_page(
             page_id=args.page_id,
             new_title=args.title,
@@ -561,17 +774,33 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         )
         return client.summarize_page(page)
     if args.command == "upload-attachment":
-        _require_allow_write(args.allow_write)
+        _require_write_intent(args.allow_write, args.dry_run)
         _assert_confluence_update_allowed(
             page_id=args.page_id,
             allowed_page_ids=settings.allowed_page_ids,
         )
         file_path = Path(args.file)
+        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        if args.dry_run:
+            attachments = client.get_attachments(args.page_id)
+            existing_attachment = None
+            for item in attachments.get("results", []):
+                if item.get("title") == file_path.name:
+                    existing_attachment = item
+                    break
+            return _confluence_attachment_preview(
+                page_id=args.page_id,
+                file_path=file_path,
+                content_type=content_type,
+                comment=args.comment,
+                minor_edit=not args.major_edit,
+                existing_attachment=existing_attachment,
+            )
         attachment = client.upload_attachment(
             page_id=args.page_id,
             file_name=file_path.name,
             content=file_path.read_bytes(),
-            content_type=mimetypes.guess_type(file_path.name)[0] or "application/octet-stream",
+            content_type=content_type,
             comment=args.comment,
             minor_edit=not args.major_edit,
         )
@@ -628,13 +857,22 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
         )
         return client.summarize_createmeta(result)
     if args.command == "jira-create-issue":
-        _require_allow_write(args.allow_write)
+        _require_write_intent(args.allow_write, args.dry_run)
         _assert_jira_project_allowed(
             project_key=args.project_key,
             allowed_project_keys=settings.allowed_project_keys,
         )
         description = _read_text_arg(args.description, args.description_file)
         extra_fields = _read_json_arg(args.fields_json, args.fields_file)
+        if args.dry_run:
+            return _jira_create_issue_preview(
+                client=client,
+                project_key=args.project_key,
+                summary=args.summary,
+                issue_type_name=args.issue_type_name,
+                description=description if description else None,
+                extra_fields=extra_fields,
+            )
         issue = client.create_issue(
             project_key=args.project_key,
             summary=args.summary,
@@ -649,14 +887,22 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
             "browse_url": client.browse_url(client.base_url, issue_key),
         }
     if args.command == "jira-add-comment":
-        _require_allow_write(args.allow_write)
+        _require_write_intent(args.allow_write, args.dry_run)
         _assert_jira_issue_allowed(
             issue_key=args.issue_key,
             allowed_issue_keys=settings.allowed_issue_keys,
         )
+        comment_body = _read_text_arg(args.body, args.body_file)
+        if args.dry_run:
+            issue = client.get_issue(args.issue_key)
+            return _jira_comment_preview(
+                issue=issue,
+                comment_body=comment_body,
+                client=client,
+            )
         comment = client.add_comment(
             issue_key=args.issue_key,
-            body=_read_text_arg(args.body, args.body_file),
+            body=comment_body,
         )
         return {
             "id": comment.get("id"),
