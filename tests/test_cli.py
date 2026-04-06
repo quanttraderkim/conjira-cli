@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from conjira_cli.cli import (
+    _build_error_payload,
     _handle_confluence,
     _handle_jira,
     _read_confluence_body_arg,
@@ -14,6 +15,7 @@ from conjira_cli.cli import (
     _sanitize_markdown_filename,
 )
 from conjira_cli.config import ConfigError, ConfluenceSettings, JiraSettings
+from conjira_cli.client import ConfluenceError, JiraError
 
 
 class CliTests(unittest.TestCase):
@@ -373,3 +375,41 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["extra_field_keys"], ["priority"])
         self.assertIn("/projects/DEMO", payload["project_browse_url"])
         mock_create_issue.assert_not_called()
+
+    def test_build_error_payload_adds_401_guidance(self) -> None:
+        payload = _build_error_payload(
+            ConfluenceError(
+                "Unauthorized",
+                status_code=401,
+                payload={"message": "Unauthorized"},
+            )
+        )
+
+        self.assertEqual(payload["status_code"], 401)
+        self.assertEqual(payload["error_type"], "ConfluenceError")
+        self.assertIn("guidance", payload)
+        self.assertTrue(
+            any("PAT" in item or "base-url" in item or "BASE_URL" in item for item in payload["guidance"])
+        )
+
+    def test_build_error_payload_adds_allowlist_guidance_for_config_error(self) -> None:
+        payload = _build_error_payload(
+            ConfigError("Write blocked: project key DEMO is not in JIRA_ALLOWED_PROJECT_KEYS.")
+        )
+
+        self.assertEqual(payload["error_type"], "ConfigError")
+        self.assertIn("guidance", payload)
+        self.assertTrue(any("allowlist" in item.lower() or "allowed" in item.lower() for item in payload["guidance"]))
+
+    def test_build_error_payload_adds_404_guidance_for_jira(self) -> None:
+        payload = _build_error_payload(
+            JiraError(
+                "Not found",
+                status_code=404,
+                payload={"errorMessages": ["Issue does not exist"]},
+            )
+        )
+
+        self.assertEqual(payload["status_code"], 404)
+        self.assertEqual(payload["error_type"], "JiraError")
+        self.assertTrue(any("identifier" in item.lower() or "issue key" in item.lower() for item in payload["guidance"]))

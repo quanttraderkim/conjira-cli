@@ -291,6 +291,16 @@ Write commands either require `--allow-write`, or `--dry-run` when you only want
 
 For stronger guardrails, define write allowlists in `local/agent.env`. If `CONFLUENCE_ALLOWED_*` or `JIRA_ALLOWED_*` values are set, writes fail closed outside the approved spaces, parents, pages, projects, or issue keys even if the PAT itself has broader permissions.
 
+## Common failure hints
+
+When the CLI hits a common API failure, it now returns a `guidance` field alongside the raw error. The most common cases are:
+
+- `401`: check the PAT, the credential source being used, and whether the base URL points at the right product host
+- `403`: check product permissions and any configured allowlists
+- `404`: check the page ID, issue key, or target path and confirm the PAT owner can see it in the web UI
+- `409`: refresh live content and retry, especially for Confluence updates after concurrent edits
+- `429` and `5xx`: retry after a short delay and reduce request volume if you are looping
+
 ## Export strategy
 
 Use `local/` only for machine-local config, temporary files, and staging artifacts. Final Markdown exports should usually go into your real notes folder, docs workspace, or knowledge base, not into the CLI repository itself.

@@ -291,6 +291,16 @@ Jira 관련 설정:
 
 더 강한 안전장치가 필요하면 `local/agent.env`에 allowlist를 넣으면 됩니다. `CONFLUENCE_ALLOWED_*`나 `JIRA_ALLOWED_*`가 설정되어 있으면, PAT 자체 권한이 더 넓더라도 허용된 공간과 대상 밖으로는 쓰기가 차단됩니다.
 
+## 자주 만나는 실패와 다음 확인 포인트
+
+이제 CLI는 흔한 API 실패에서 raw error와 함께 `guidance` 필드도 돌려줍니다. 가장 자주 보는 경우는 아래와 같습니다.
+
+- `401`: PAT, 실제로 읽히는 credential source, base URL이 올바른지 확인
+- `403`: 제품 권한과 allowlist 설정 확인
+- `404`: page ID, issue key, 대상 경로가 맞는지와 웹 UI에서 실제로 보이는지 확인
+- `409`: 특히 Confluence 업데이트는 최신 페이지를 다시 읽고 재시도
+- `429`, `5xx`: 잠시 기다렸다가 재시도하고 반복 요청 빈도를 낮추기
+
 ## Export 전략
 
 `local/`은 machine-local 설정, 임시 파일, staging 용도로만 쓰는 편이 좋습니다. 최종 Markdown 산출물은 보통 CLI 저장소 안이 아니라 실제 업무 폴더, 노트 저장소, 지식관리 폴더로 보내는 것이 자연스럽습니다.

@@ -559,6 +559,107 @@ def _is_jira_command(command: str) -> bool:
     return command.startswith("jira-")
 
 
+def _guidance_for_status(exc: Exception) -> list[str]:
+    if not isinstance(exc, (ConfluenceError, JiraError)):
+        return []
+
+    status_code = exc.status_code
+    product = "Confluence" if isinstance(exc, ConfluenceError) else "Jira"
+    if status_code == 401:
+        return [
+            "Confirm the PAT is valid, active, and issued for {0}.".format(product),
+            "Check that --base-url or {0}_BASE_URL points to the correct {1} host.".format(
+                product.upper(),
+                product,
+            ),
+            "If you use Keychain, env vars, or token files, confirm the CLI is reading the intended credential source.",
+        ]
+    if status_code == 403:
+        return [
+            "Check whether the PAT owner can access or edit the target object in the {0} web UI.".format(product),
+            "If write allowlists are configured, verify the target is included in the approved spaces, pages, projects, or issue keys.",
+            "If this is a write command, confirm the PAT owner has edit permission for the target content.",
+        ]
+    if status_code == 404:
+        return [
+            "Verify the base URL and identifier are correct, such as page ID, issue key, or attachment target page.",
+            "Confirm the PAT owner can see the target object in the {0} web UI.".format(product),
+            "If you exported content earlier, refresh from the live source before retrying.",
+        ]
+    if status_code == 409:
+        return [
+            "Refresh the live object and retry, because another edit may have changed the current version.",
+            "For Confluence page updates, fetch the latest page before applying another write.",
+        ]
+    if status_code == 429:
+        return [
+            "The server asked you to slow down. Retry after a short delay.",
+            "Reduce batch size, polling frequency, or repeated write attempts if you are automating a loop.",
+        ]
+    if status_code is not None and 500 <= status_code <= 599:
+        return [
+            "The Atlassian server returned a transient failure. Retry after a short delay.",
+            "If the error persists, check whether the {0} instance is degraded or unavailable.".format(product),
+        ]
+    return []
+
+
+def _guidance_for_config_error(message: str) -> list[str]:
+    lowered = message.lower()
+    if "missing confluence token" in lowered or "missing jira token" in lowered:
+        return [
+            "Provide a PAT with --token, a token file, or env or Keychain settings for the target product.",
+            "If you expected Keychain lookup to work, verify the configured service and account names exist on this machine.",
+        ]
+    if "missing confluence base url" in lowered or "missing jira base url" in lowered:
+        return [
+            "Set the base URL with --base-url, an env var, or local agent.env before retrying.",
+            "Make sure the URL points at the product root, not a specific page or issue path.",
+        ]
+    if "write blocked" in lowered:
+        return [
+            "The CLI safety allowlist rejected this target before any API write happened.",
+            "Check CONFLUENCE_ALLOWED_* or JIRA_ALLOWED_* values in your local config and expand them only if this target is intentionally approved.",
+        ]
+    if "--allow-write or --dry-run" in lowered:
+        return [
+            "Use --dry-run to preview the change first, or add --allow-write to execute it intentionally.",
+        ]
+    if "update-page requires at least one" in lowered:
+        return [
+            "Provide a title change, a replacement body, or appended content before retrying update-page.",
+        ]
+    return []
+
+
+def _build_error_payload(exc: Exception) -> Dict[str, Any]:
+    error_payload: Dict[str, Any] = {
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+    }
+
+    guidance: list[str] = []
+    if isinstance(exc, (ConfluenceError, JiraError)):
+        error_payload["status_code"] = exc.status_code
+        if exc.payload is not None:
+            error_payload["payload"] = exc.payload
+        guidance = _guidance_for_status(exc)
+    elif isinstance(exc, ConfigError):
+        guidance = _guidance_for_config_error(str(exc))
+    elif isinstance(exc, FileNotFoundError):
+        guidance = [
+            "Check that the referenced local file exists and that the path is correct on this machine.",
+        ]
+    elif isinstance(exc, json.JSONDecodeError):
+        guidance = [
+            "Check that the JSON input is valid, especially fields files and inline JSON arguments.",
+        ]
+
+    if guidance:
+        error_payload["guidance"] = guidance
+    return error_payload
+
+
 def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
     settings = build_confluence_settings(
         base_url=args.base_url,
@@ -921,10 +1022,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         _emit(payload, args.output)
         return 0
     except (ConfigError, ConfluenceError, JiraError, FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
-        error_payload: Dict[str, Any] = {"error": str(exc)}
-        if isinstance(exc, (ConfluenceError, JiraError)):
-            error_payload["status_code"] = exc.status_code
-            if exc.payload is not None:
-                error_payload["payload"] = exc.payload
+        error_payload = _build_error_payload(exc)
         print(json.dumps(error_payload, ensure_ascii=False, indent=2), file=sys.stderr)
         return 1
