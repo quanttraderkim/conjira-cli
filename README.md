@@ -63,10 +63,8 @@ Search Jira and fetch an issue:
 
 ## Set up in about 5 minutes
 
-After publishing, replace the placeholder clone URL below with your real repository URL.
-
 ```bash
-git clone https://github.com/your-org/conjira-cli.git
+git clone https://github.com/quanttraderkim/conjira-cli.git
 cd conjira-cli
 python3 -m venv .venv
 source .venv/bin/activate
