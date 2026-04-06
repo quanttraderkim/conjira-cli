@@ -2,6 +2,8 @@
 
 Unofficial, agent-friendly CLI for self-hosted Confluence and Jira.
 
+Korean version: [README.ko.md](README.ko.md)
+
 `conjira-cli` is a small Python command-line tool for teams that run Confluence and Jira on their own infrastructure and want a practical local interface for scripts, coding agents, and Markdown workflows. It wraps standard Atlassian REST APIs behind a simple CLI, supports safer local credential handling, and adds guardrails for write operations.
 
 This repository is intentionally sanitized for sharing. It does not include real company URLs, PATs, project keys, page IDs, issue keys, or exported workspace data.
