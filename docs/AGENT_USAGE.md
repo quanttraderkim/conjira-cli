@@ -29,7 +29,7 @@ On macOS, Keychain is the recommended local path. On Linux or Windows, prefer en
 The preferred storage policy is:
 
 - `local/` for config, temporary files, and staging only
-- Obsidian work folders for final exported Markdown
+- your real notes folder, docs workspace, or knowledge base for final exported Markdown
 - `CONFLUENCE_EXPORT_DEFAULT_DIR` as the default final destination
 - `CONFLUENCE_EXPORT_STAGING_DIR` or `--staging-local` only for previews or short-lived working copies
 
