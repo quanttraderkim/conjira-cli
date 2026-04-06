@@ -68,6 +68,38 @@ Search Jira and fetch an issue:
 ./bin/conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
 ```
 
+Short sample output blocks, using synthetic values:
+
+```json
+{
+  "base_url": "https://confluence.example.com",
+  "authenticated": true,
+  "space_count_sample": 1,
+  "first_space_key": "DOCS"
+}
+```
+
+```json
+{
+  "page_id": "123456",
+  "title": "Quarterly planning notes",
+  "output_file": "/path/to/notes/Quarterly planning notes.md",
+  "source_url": "https://confluence.example.com/pages/viewpage.action?pageId=123456",
+  "used_staging_local": false
+}
+```
+
+```json
+{
+  "key": "DEMO-123",
+  "summary": "Roll out the new onboarding flow",
+  "status": "In Progress",
+  "issue_type": "Task",
+  "assignee": "Alex Kim",
+  "browse_url": "https://jira.example.com/browse/DEMO-123"
+}
+```
+
 ## Set up in about 5 minutes
 
 ```bash
