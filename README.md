@@ -6,7 +6,7 @@ Korean version: [README.ko.md](README.ko.md)
 
 `conjira-cli` is a small Python command-line tool for teams that run Confluence and Jira on their own infrastructure and want a practical local interface for scripts, coding agents, and Markdown workflows. It wraps standard Atlassian REST APIs behind a simple CLI, supports safer local credential handling, and adds guardrails for write operations.
 
-You do not need to be a Python developer to get value from this repository. If you already use a local coding agent such as Codex, Claude Code, or another shell-capable agent, you can hand the repo to the agent, point it at your local `agent.env`, and ask for tasks like “export this Confluence page to Markdown”, “refresh this stale wiki note”, or “search Jira for issues created this week”. The agent can read this README, follow `docs/AGENT_USAGE.md`, and run the CLI for you.
+You do not need to be a Python developer to get value from this repository. If you already use a local coding agent or another shell-capable AI tool, you can hand the repo to the agent, point it at your local `agent.env`, and ask for tasks like “export this Confluence page to Markdown”, “refresh this stale wiki note”, or “search Jira for issues created this week”. The agent can read this README, follow `docs/AGENT_USAGE.md`, and run the CLI for you.
 
 ## The problem this solves
 
@@ -136,7 +136,7 @@ On macOS, the best local experience is to keep PATs in Keychain and store only n
 CONFLUENCE_BASE_URL=https://confluence.example.com
 CONFLUENCE_PAT_KEYCHAIN_SERVICE=conjira-cli
 CONFLUENCE_PAT_KEYCHAIN_ACCOUNT=confluence-prod
-CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes/Confluence Inbox
+CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes/wiki-exports
 CONFLUENCE_EXPORT_STAGING_DIR=/absolute/path/to/conjira-cli/local/exports
 
 JIRA_BASE_URL=https://jira.example.com

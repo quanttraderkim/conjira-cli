@@ -136,7 +136,7 @@ macOS에서는 PAT를 Keychain에 넣고, `local/agent.env`에는 base URL이나
 CONFLUENCE_BASE_URL=https://confluence.example.com
 CONFLUENCE_PAT_KEYCHAIN_SERVICE=conjira-cli
 CONFLUENCE_PAT_KEYCHAIN_ACCOUNT=confluence-prod
-CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes/Confluence Inbox
+CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes/wiki-exports
 CONFLUENCE_EXPORT_STAGING_DIR=/absolute/path/to/conjira-cli/local/exports
 
 JIRA_BASE_URL=https://jira.example.com
