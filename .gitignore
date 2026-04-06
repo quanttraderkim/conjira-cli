@@ -1,0 +1,13 @@
+.env
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+dist/
+build/
+*.egg-info/
+local/agent.env
+local/*.local.md
+local/*.private.md
+local/exports/
+.tmp-venv*/
