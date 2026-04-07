@@ -50,6 +50,12 @@ Create a Confluence page directly from Markdown:
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
 ```
 
+Replace one section under a specific heading:
+
+```bash
+./bin/conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
+```
+
 Preview a write without changing anything:
 
 ```bash
@@ -227,6 +233,12 @@ Create or update a Confluence page from Markdown:
 ```bash
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown "# Demo\n\n- Item A"
 ./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
+```
+
+Replace one named section on an existing Confluence page:
+
+```bash
+./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
 ```
 
 Preview a Confluence or Jira write first:

@@ -23,6 +23,7 @@ from conjira_cli.config import (
 from conjira_cli.inline_comments import render_inline_comment_summary_markdown
 from conjira_cli.markdown_export import MarkdownExporter
 from conjira_cli.markdown_import import markdown_to_storage_html
+from conjira_cli.section_edit import SectionEditError, replace_section_html
 
 
 def _read_text_arg(raw_text: Optional[str], file_path: Optional[str]) -> str:
@@ -279,6 +280,20 @@ def _build_parser() -> argparse.ArgumentParser:
     update_page_append_group.add_argument("--append-markdown")
     update_page_append_group.add_argument("--append-markdown-file")
 
+    replace_section = subparsers.add_parser(
+        "replace-section",
+        help="Replace the content under a specific Confluence heading",
+    )
+    replace_section.add_argument("--page-id", required=True)
+    replace_section.add_argument("--heading", required=True)
+    replace_section.add_argument("--allow-write", action="store_true")
+    replace_section.add_argument("--dry-run", action="store_true")
+    replace_section_body_group = replace_section.add_mutually_exclusive_group(required=True)
+    replace_section_body_group.add_argument("--section-html")
+    replace_section_body_group.add_argument("--section-file")
+    replace_section_body_group.add_argument("--section-markdown")
+    replace_section_body_group.add_argument("--section-markdown-file")
+
     upload_attachment = subparsers.add_parser(
         "upload-attachment",
         help="Upload or update a Confluence attachment on a page",
@@ -472,6 +487,32 @@ def _confluence_update_preview(
     }
 
 
+def _confluence_replace_section_preview(
+    *,
+    page: Dict[str, Any],
+    heading: str,
+    result: Any,
+    body_source: str,
+) -> Dict[str, Any]:
+    current_summary = ConfluenceClient.summarize_page(page)
+    return {
+        "dry_run": True,
+        "product": "confluence",
+        "action": "replace-section",
+        "page_id": current_summary.get("id"),
+        "space_key": current_summary.get("space_key"),
+        "source_url": current_summary.get("webui_url"),
+        "heading": heading,
+        "matched_heading": result.matched_heading,
+        "heading_level": result.heading_level,
+        "body_source": body_source,
+        "replaced_section": True,
+        "old_section_preview": _preview_html(result.old_section_html),
+        "new_section_preview": _preview_html(result.new_section_html),
+        "resulting_body_preview": _preview_html(result.updated_body_html),
+    }
+
+
 def _confluence_attachment_preview(
     *,
     page_id: str,
@@ -628,6 +669,16 @@ def _guidance_for_config_error(message: str) -> list[str]:
     if "update-page requires at least one" in lowered:
         return [
             "Provide a title change, a replacement body, or appended content before retrying update-page.",
+        ]
+    if "replace-section target heading" in lowered:
+        return [
+            "Check that the heading text exists exactly once on the live Confluence page before retrying replace-section.",
+            "For the first iteration, replace-section is safest on text-first pages with clear heading structure.",
+        ]
+    if "failed to parse confluence storage html fragment" in lowered:
+        return [
+            "Check that the replacement input converts into valid Confluence storage HTML.",
+            "If the source is Markdown, retry with simpler text-first content before using macro-heavy input.",
         ]
     return []
 
@@ -874,6 +925,50 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             append_html=append_html,
         )
         return client.summarize_page(page)
+    if args.command == "replace-section":
+        _require_write_intent(args.allow_write, args.dry_run)
+        _assert_confluence_update_allowed(
+            page_id=args.page_id,
+            allowed_page_ids=settings.allowed_page_ids,
+        )
+        replacement_html = _read_confluence_body_arg(
+            args.section_html,
+            args.section_file,
+            args.section_markdown,
+            args.section_markdown_file,
+        )
+        page = client.get_page(args.page_id, expand="body.storage,version,space")
+        current_body = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
+        try:
+            replacement = replace_section_html(
+                current_body,
+                heading=args.heading,
+                replacement_html=replacement_html,
+            )
+        except SectionEditError as exc:
+            raise ConfigError(str(exc)) from exc
+        body_source = _confluence_body_source(
+            raw_html=args.section_html,
+            html_file=args.section_file,
+            raw_markdown=args.section_markdown,
+            markdown_file=args.section_markdown_file,
+        )
+        if args.dry_run:
+            return _confluence_replace_section_preview(
+                page=page,
+                heading=args.heading,
+                result=replacement,
+                body_source=body_source or "unknown",
+            )
+        updated = client.update_page(
+            page_id=args.page_id,
+            new_body_html=replacement.updated_body_html,
+        )
+        payload = client.summarize_page(updated)
+        payload["action"] = "replace-section"
+        payload["heading"] = args.heading
+        payload["matched_heading"] = replacement.matched_heading
+        return payload
     if args.command == "upload-attachment":
         _require_write_intent(args.allow_write, args.dry_run)
         _assert_confluence_update_allowed(
