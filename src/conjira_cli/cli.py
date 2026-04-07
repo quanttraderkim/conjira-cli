@@ -960,8 +960,8 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
                 result=replacement,
                 body_source=body_source or "unknown",
             )
-        updated = client.update_page(
-            page_id=args.page_id,
+        updated = client.update_page_from_snapshot(
+            page,
             new_body_html=replacement.updated_body_html,
         )
         payload = client.summarize_page(updated)

@@ -360,7 +360,7 @@ class CliTests(unittest.TestCase):
             "conjira_cli.cli.ConfluenceClient.get_page",
             return_value=page,
         ) as mock_get_page, mock.patch(
-            "conjira_cli.cli.ConfluenceClient.update_page",
+            "conjira_cli.cli.ConfluenceClient.update_page_from_snapshot",
             return_value=updated_summary,
         ) as mock_update_page:
             payload = _handle_confluence(args)
@@ -370,7 +370,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["matched_heading"], "Install")
         mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space")
         mock_update_page.assert_called_once()
-        self.assertEqual(mock_update_page.call_args.kwargs["page_id"], "12345")
+        self.assertEqual(mock_update_page.call_args.args[0]["id"], "12345")
         self.assertIn("<p>Replacement</p>", mock_update_page.call_args.kwargs["new_body_html"])
 
     def test_build_error_payload_adds_replace_section_guidance(self) -> None:

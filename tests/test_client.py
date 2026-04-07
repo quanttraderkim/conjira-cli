@@ -5,6 +5,30 @@ from conjira_cli.client import ConfluenceClient, JiraClient
 
 
 class ClientTests(unittest.TestCase):
+    def test_update_page_from_snapshot_uses_snapshot_version_and_id(self) -> None:
+        client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
+        snapshot = {
+            "id": "123",
+            "type": "page",
+            "title": "Demo",
+            "space": {"key": "TEST"},
+            "version": {"number": 7},
+            "body": {"storage": {"value": "<p>Old body</p>"}},
+        }
+
+        with mock.patch.object(client, "request", return_value={"id": "123"}) as mock_request:
+            client.update_page_from_snapshot(
+                snapshot,
+                new_body_html="<p>New body</p>",
+            )
+
+        mock_request.assert_called_once()
+        self.assertEqual(mock_request.call_args.args[0], "PUT")
+        self.assertEqual(mock_request.call_args.args[1], "/rest/api/content/123")
+        payload = mock_request.call_args.kwargs["body"]
+        self.assertEqual(payload["version"]["number"], 8)
+        self.assertEqual(payload["body"]["storage"]["value"], "<p>New body</p>")
+
     def test_summarize_page_extracts_core_fields(self) -> None:
         page = {
             "id": "123",
