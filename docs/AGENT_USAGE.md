@@ -107,6 +107,18 @@ Create a Confluence page from Markdown:
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file "/path/to/page.md"
 ```
 
+Replace a named section under an existing Confluence heading:
+
+```bash
+./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "Rollout plan" --section-markdown-file "/path/to/rollout.md"
+```
+
+Preview the same section replacement before writing:
+
+```bash
+./bin/conjira --env-file ./local/agent.env replace-section --dry-run --page-id 100002 --heading "Rollout plan" --section-markdown-file "/path/to/rollout.md"
+```
+
 Update an approved Confluence page:
 
 ```bash
@@ -170,6 +182,7 @@ Preview a Jira write before using `--allow-write`:
 - If `CONFLUENCE_ALLOWED_*` or `JIRA_ALLOWED_*` values are set, treat them as hard safety boundaries rather than suggestions.
 - Markdown upload is a best-effort conversion to Confluence storage HTML. Prefer it for common text-first pages, not for macro-heavy round-trips.
 - `--body-file` and `--append-file` are for storage HTML files. Use `--body-markdown-file` or `--append-markdown-file` for Markdown inputs.
+- `replace-section` currently works best on text-first pages with clear heading structure. It intentionally fails when the target heading is missing or ambiguous.
 
 ## Local setup
 

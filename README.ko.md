@@ -50,6 +50,12 @@ Markdown 파일로 Confluence 페이지 생성:
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
 ```
 
+특정 heading 아래 섹션만 교체:
+
+```bash
+./bin/conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
+```
+
 실제로 쓰기 전에 preview만 확인:
 
 ```bash
@@ -227,6 +233,12 @@ Markdown으로 Confluence 페이지 생성 및 수정:
 ```bash
 ./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown "# Demo\n\n- Item A"
 ./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
+```
+
+기존 Confluence 페이지의 특정 섹션 교체:
+
+```bash
+./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
 ```
 
 Confluence나 Jira 쓰기 작업을 먼저 preview:
