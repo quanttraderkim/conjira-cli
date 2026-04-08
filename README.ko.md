@@ -80,6 +80,8 @@ conjira-setup-macos
 ```
 
 이 스크립트는 PAT를 macOS Keychain에 저장하고, `local/agent.env`에는 비밀이 아닌 설정만 기록하며, 마지막에 `auth-check`까지 실행할 수 있습니다.
+대부분의 사용자는 Keychain 이름을 따로 정할 필요 없이 base URL과 PAT만 입력하면 됩니다.
+PAT 입력은 화면에 보이지 않는 숨김 입력이므로, 아무것도 안 보여도 그대로 붙여넣고 Enter를 누르시면 됩니다.
 `~/.zshrc` 같은 셸 프로필 파일에 PAT 값을 쓰지는 않습니다.
 아직 엔트리포인트를 설치하지 않은 source checkout 상태라면 아래 wrapper도 사용할 수 있습니다.
 

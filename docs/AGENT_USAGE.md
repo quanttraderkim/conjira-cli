@@ -205,6 +205,8 @@ If `local/agent.env` is missing, either create it from `local/agent.env.example`
 conjira-setup-macos
 ```
 
+For most users, `conjira-setup-macos` only needs the product base URL and PAT. The default Keychain service/account names are filled in automatically. PAT prompts are hidden on screen, so paste the token and press Enter even if the input looks blank.
+
 On macOS, store the Confluence PAT like this:
 
 ```bash
