@@ -33,92 +33,6 @@ English version: [README.md](README.md)
 
 이 도구는 특히 셀프 호스팅 Atlassian 환경, 즉 Server나 Data Center 스타일 배포에 잘 맞습니다. 현재 검증된 경로는 self-hosted base URL과 Bearer PAT 기반 인증이며, Atlassian Cloud보다 온프레미스 패턴에 더 가깝습니다. 참고 문서는 [Atlassian Cloud basic auth](https://developer.atlassian.com/cloud/jira/service-desk/basic-auth-for-rest-apis/) 와 [Atlassian Personal Access Tokens](https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html) 입니다.
 
-## 데모
-
-Confluence와 Jira 인증 확인:
-
-```bash
-conjira --env-file ./local/agent.env auth-check
-conjira --env-file ./local/agent.env jira-auth-check
-```
-
-Confluence 페이지를 Markdown으로 export:
-
-```bash
-conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
-```
-
-Markdown 파일로 Confluence 페이지 생성:
-
-```bash
-conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
-```
-
-특정 heading 아래 섹션만 교체:
-
-```bash
-conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
-```
-
-실제로 쓰기 전에 preview만 확인:
-
-```bash
-conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
-conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
-```
-
-기존 export가 오래됐는지 확인하고 최신 위키 내용으로 갱신:
-
-```bash
-conjira --env-file ./local/agent.env check-page-md-freshness --file "/path/to/notes/page.md"
-conjira --env-file ./local/agent.env refresh-page-md --file "/path/to/notes/page.md"
-```
-
-Confluence 인라인 코멘트 스레드 요약 export:
-
-```bash
-conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/notes"
-```
-
-Jira 검색과 이슈 조회:
-
-```bash
-conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
-conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
-```
-
-예시 출력은 아래처럼 짧고 단순한 JSON 형태입니다. 아래 값은 모두 synthetic example입니다.
-
-```json
-{
-  "base_url": "https://confluence.example.com",
-  "authenticated": true,
-  "space_count_sample": 1,
-  "first_space_key": "DOCS"
-}
-```
-
-```json
-{
-  "page_id": "123456",
-  "title": "Quarterly planning notes",
-  "output_file": "/path/to/notes/Quarterly planning notes.md",
-  "source_url": "https://confluence.example.com/pages/viewpage.action?pageId=123456",
-  "used_staging_local": false
-}
-```
-
-```json
-{
-  "key": "DEMO-123",
-  "summary": "Roll out the new onboarding flow",
-  "status": "In Progress",
-  "issue_type": "Task",
-  "assignee": "Alex Kim",
-  "browse_url": "https://jira.example.com/browse/DEMO-123"
-}
-```
-
 ## 5분 안에 시작하기
 
 이미 `pipx`를 쓰고 있다면 가장 짧은 설치 경로는 아래와 같습니다.
@@ -171,6 +85,55 @@ conjira-setup-macos
 
 ```bash
 bash scripts/setup-conjira-macos.sh
+```
+
+## 에이전트에게 이렇게 요청할 수 있습니다
+
+Codex, Claude Code 같은 로컬 셸 실행형 에이전트를 쓰고 있다면, 긴 CLI 명령 대신 아래처럼 자연어로 요청해도 됩니다.
+
+- "conjira를 써서 Confluence 페이지 `123456`을 Markdown으로 export해서 내 노트 폴더에 저장해줘."
+- "이 export된 Confluence 문서가 최신인지 확인하고, 오래됐으면 위키 기준으로 refresh한 뒤 변경 내용을 요약해줘."
+- "Jira에서 이번 주 생성된 `DEMO` 프로젝트 이슈를 찾아서 짧게 정리해줘."
+- "`123456` 페이지의 `배포 계획` 섹션만 바꾸고, 먼저 dry-run preview를 보여준 다음 괜찮으면 반영해줘."
+
+직접 CLI를 실행하고 싶다면 아래 정도만 먼저 보면 됩니다.
+
+```bash
+conjira --env-file ./local/agent.env auth-check
+conjira --env-file ./local/agent.env jira-auth-check
+conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
+```
+
+예시 출력은 아래처럼 짧고 단순한 JSON 형태입니다. 아래 값은 모두 synthetic example입니다.
+
+```json
+{
+  "base_url": "https://confluence.example.com",
+  "authenticated": true,
+  "space_count_sample": 1,
+  "first_space_key": "DOCS"
+}
+```
+
+```json
+{
+  "page_id": "123456",
+  "title": "Quarterly planning notes",
+  "output_file": "/path/to/notes/Quarterly planning notes.md",
+  "source_url": "https://confluence.example.com/pages/viewpage.action?pageId=123456",
+  "used_staging_local": false
+}
+```
+
+```json
+{
+  "key": "DEMO-123",
+  "summary": "Roll out the new onboarding flow",
+  "status": "In Progress",
+  "issue_type": "Task",
+  "assignee": "Alex Kim",
+  "browse_url": "https://jira.example.com/browse/DEMO-123"
+}
 ```
 
 ## 자격 증명 관리

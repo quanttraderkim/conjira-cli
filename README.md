@@ -33,92 +33,6 @@ If your team uses self-hosted Confluence and Jira, official cloud-native connect
 
 This tool is aimed at self-hosted Atlassian environments first, especially Server/Data Center style deployments. The current tested path uses Personal Access Tokens with Bearer auth against self-hosted base URLs, which matches the on-premise Atlassian pattern much better than Atlassian Cloud. Official references: [Atlassian Cloud basic auth](https://developer.atlassian.com/cloud/jira/service-desk/basic-auth-for-rest-apis/) and [Atlassian Personal Access Tokens](https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html).
 
-## Demo
-
-Validate both products:
-
-```bash
-conjira --env-file ./local/agent.env auth-check
-conjira --env-file ./local/agent.env jira-auth-check
-```
-
-Export a Confluence page to Markdown:
-
-```bash
-conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
-```
-
-Create a Confluence page directly from Markdown:
-
-```bash
-conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
-```
-
-Replace one section under a specific heading:
-
-```bash
-conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
-```
-
-Preview a write without changing anything:
-
-```bash
-conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
-conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
-```
-
-Check whether an exported file is stale and refresh it if the live page changed:
-
-```bash
-conjira --env-file ./local/agent.env check-page-md-freshness --file "/path/to/notes/page.md"
-conjira --env-file ./local/agent.env refresh-page-md --file "/path/to/notes/page.md"
-```
-
-Summarize inline comment threads on a Confluence page:
-
-```bash
-conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/notes"
-```
-
-Search Jira and fetch an issue:
-
-```bash
-conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
-conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
-```
-
-Short sample output blocks, using synthetic values:
-
-```json
-{
-  "base_url": "https://confluence.example.com",
-  "authenticated": true,
-  "space_count_sample": 1,
-  "first_space_key": "DOCS"
-}
-```
-
-```json
-{
-  "page_id": "123456",
-  "title": "Quarterly planning notes",
-  "output_file": "/path/to/notes/Quarterly planning notes.md",
-  "source_url": "https://confluence.example.com/pages/viewpage.action?pageId=123456",
-  "used_staging_local": false
-}
-```
-
-```json
-{
-  "key": "DEMO-123",
-  "summary": "Roll out the new onboarding flow",
-  "status": "In Progress",
-  "issue_type": "Task",
-  "assignee": "Alex Kim",
-  "browse_url": "https://jira.example.com/browse/DEMO-123"
-}
-```
-
 ## Set up in about 5 minutes
 
 If you already use `pipx`, the shortest install path is:
@@ -171,6 +85,55 @@ If you are running directly from a source checkout before installing entrypoints
 
 ```bash
 bash scripts/setup-conjira-macos.sh
+```
+
+## Ask an agent
+
+If you are using Codex, Claude Code, or another shell-capable local coding agent, you can usually ask in plain language instead of writing the command yourself. For example:
+
+- "Use conjira to export Confluence page `123456` to Markdown and save it into my notes folder."
+- "Check whether this exported Confluence note is stale, refresh it from the live wiki, and summarize what changed."
+- "Search Jira for issues created this week in project `DEMO` and give me a short summary."
+- "Replace the `Rollout plan` section on page `123456`, show me a dry-run preview, and only write if the preview looks correct."
+
+If you want to run the CLI directly, start with these short commands:
+
+```bash
+conjira --env-file ./local/agent.env auth-check
+conjira --env-file ./local/agent.env jira-auth-check
+conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
+```
+
+Short sample output blocks, using synthetic values:
+
+```json
+{
+  "base_url": "https://confluence.example.com",
+  "authenticated": true,
+  "space_count_sample": 1,
+  "first_space_key": "DOCS"
+}
+```
+
+```json
+{
+  "page_id": "123456",
+  "title": "Quarterly planning notes",
+  "output_file": "/path/to/notes/Quarterly planning notes.md",
+  "source_url": "https://confluence.example.com/pages/viewpage.action?pageId=123456",
+  "used_staging_local": false
+}
+```
+
+```json
+{
+  "key": "DEMO-123",
+  "summary": "Roll out the new onboarding flow",
+  "status": "In Progress",
+  "issue_type": "Task",
+  "assignee": "Alex Kim",
+  "browse_url": "https://jira.example.com/browse/DEMO-123"
+}
 ```
 
 ## Credential handling
