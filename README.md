@@ -1,5 +1,7 @@
 # conjira-cli
 
+[![CI](https://github.com/quanttraderkim/conjira-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/quanttraderkim/conjira-cli/actions/workflows/ci.yml) [![PyPI version](https://img.shields.io/pypi/v/conjira-cli)](https://pypi.org/project/conjira-cli/) [![Python versions](https://img.shields.io/pypi/pyversions/conjira-cli)](https://pypi.org/project/conjira-cli/) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/quanttraderkim/conjira-cli/blob/main/LICENSE)
+
 Unofficial, agent-friendly CLI for self-hosted Confluence and Jira.
 
 Korean version: [README.ko.md](README.ko.md)
@@ -36,53 +38,53 @@ This tool is aimed at self-hosted Atlassian environments first, especially Serve
 Validate both products:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env auth-check
-./bin/conjira --env-file ./local/agent.env jira-auth-check
+conjira --env-file ./local/agent.env auth-check
+conjira --env-file ./local/agent.env jira-auth-check
 ```
 
 Export a Confluence page to Markdown:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
+conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
 ```
 
 Create a Confluence page directly from Markdown:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
+conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
 ```
 
 Replace one section under a specific heading:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
+conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
 ```
 
 Preview a write without changing anything:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
-./bin/conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
+conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
+conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
 ```
 
 Check whether an exported file is stale and refresh it if the live page changed:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env check-page-md-freshness --file "/path/to/notes/page.md"
-./bin/conjira --env-file ./local/agent.env refresh-page-md --file "/path/to/notes/page.md"
+conjira --env-file ./local/agent.env check-page-md-freshness --file "/path/to/notes/page.md"
+conjira --env-file ./local/agent.env refresh-page-md --file "/path/to/notes/page.md"
 ```
 
 Summarize inline comment threads on a Confluence page:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/notes"
+conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/notes"
 ```
 
 Search Jira and fetch an issue:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
-./bin/conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
+conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
+conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
 ```
 
 Short sample output blocks, using synthetic values:
@@ -122,7 +124,14 @@ Short sample output blocks, using synthetic values:
 If you already use `pipx`, the shortest install path is:
 
 ```bash
-pipx install git+https://github.com/quanttraderkim/conjira-cli.git
+pipx install conjira-cli
+conjira-setup-macos
+```
+
+If you do not use `pipx`, a simple fallback is:
+
+```bash
+python3 -m pip install --user conjira-cli
 conjira-setup-macos
 ```
 
@@ -230,8 +239,8 @@ JIRA_PAT_FILE=/path/to/jira.token
 Then verify the connection:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env auth-check
-./bin/conjira --env-file ./local/agent.env jira-auth-check
+conjira --env-file ./local/agent.env auth-check
+conjira --env-file ./local/agent.env jira-auth-check
 ```
 
 ## Common commands
@@ -239,73 +248,73 @@ Then verify the connection:
 Read a Confluence page:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env get-page --page-id 123456 --expand body.storage,space,version
+conjira --env-file ./local/agent.env get-page --page-id 123456 --expand body.storage,space,version
 ```
 
 Export a Confluence page to Markdown:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/work-folder"
+conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/work-folder"
 ```
 
 Export a Confluence page tree to nested Markdown folders:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-tree-md --page-id 123456 --output-dir "/path/to/work-folder"
+conjira --env-file ./local/agent.env export-tree-md --page-id 123456 --output-dir "/path/to/work-folder"
 ```
 
 Export grouped inline comment threads:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/work-folder"
+conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/work-folder"
 ```
 
 Create or update a Confluence page:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "CLI test page" --body-html "<p>Hello from conjira</p>"
-./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-html "<p>Updated by conjira</p>"
+conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "CLI test page" --body-html "<p>Hello from conjira</p>"
+conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-html "<p>Updated by conjira</p>"
 ```
 
 Create or update a Confluence page from Markdown:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown "# Demo\n\n- Item A"
-./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
+conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown "# Demo\n\n- Item A"
+conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
 ```
 
 Replace one named section on an existing Confluence page:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
+conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
 ```
 
 Move an existing Confluence page under a different parent page:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env move-page --dry-run --page-id 100002 --new-parent-id 100001
-./bin/conjira --env-file ./local/agent.env move-page --allow-write --page-id 100002 --new-parent-id 100001
+conjira --env-file ./local/agent.env move-page --dry-run --page-id 100002 --new-parent-id 100001
+conjira --env-file ./local/agent.env move-page --allow-write --page-id 100002 --new-parent-id 100001
 ```
 
 Preview a Confluence or Jira write first:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env update-page --dry-run --page-id 100002 --append-markdown-file ./notes/update.md
-./bin/conjira --env-file ./local/agent.env jira-create-issue --dry-run --project-key DEMO --issue-type-name Task --summary "Preview issue" --description "No write yet"
+conjira --env-file ./local/agent.env update-page --dry-run --page-id 100002 --append-markdown-file ./notes/update.md
+conjira --env-file ./local/agent.env jira-create-issue --dry-run --project-key DEMO --issue-type-name Task --summary "Preview issue" --description "No write yet"
 ```
 
 Search Jira and fetch an issue:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
-./bin/conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
+conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
+conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
 ```
 
 Create a Jira issue or add a comment:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env jira-create-issue --allow-write --project-key DEMO --issue-type-name Task --summary "CLI issue test" --description "Created from conjira"
-./bin/conjira --env-file ./local/agent.env jira-add-comment --allow-write --issue-key DEMO-123 --body "Comment from conjira"
+conjira --env-file ./local/agent.env jira-create-issue --allow-write --project-key DEMO --issue-type-name Task --summary "CLI issue test" --description "Created from conjira"
+conjira --env-file ./local/agent.env jira-add-comment --allow-write --issue-key DEMO-123 --body "Comment from conjira"
 ```
 
 ## Configuration

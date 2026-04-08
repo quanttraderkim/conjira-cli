@@ -1,5 +1,7 @@
 # conjira-cli
 
+[![CI](https://github.com/quanttraderkim/conjira-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/quanttraderkim/conjira-cli/actions/workflows/ci.yml) [![PyPI version](https://img.shields.io/pypi/v/conjira-cli)](https://pypi.org/project/conjira-cli/) [![Python versions](https://img.shields.io/pypi/pyversions/conjira-cli)](https://pypi.org/project/conjira-cli/) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/quanttraderkim/conjira-cli/blob/main/LICENSE)
+
 셀프 호스팅 환경의 Confluence와 Jira를 위한 비공식, 에이전트 친화적 CLI입니다.
 
 English version: [README.md](README.md)
@@ -36,53 +38,53 @@ English version: [README.md](README.md)
 Confluence와 Jira 인증 확인:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env auth-check
-./bin/conjira --env-file ./local/agent.env jira-auth-check
+conjira --env-file ./local/agent.env auth-check
+conjira --env-file ./local/agent.env jira-auth-check
 ```
 
 Confluence 페이지를 Markdown으로 export:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
+conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
 ```
 
 Markdown 파일로 Confluence 페이지 생성:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
+conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown-file ./notes/demo.md
 ```
 
 특정 heading 아래 섹션만 교체:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
+conjira --env-file ./local/agent.env replace-section --dry-run --page-id 123456 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
 ```
 
 실제로 쓰기 전에 preview만 확인:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
-./bin/conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
+conjira --env-file ./local/agent.env create-page --dry-run --space-key DOCS --parent-id 100001 --title "Preview only" --body-markdown "# Demo"
+conjira --env-file ./local/agent.env jira-add-comment --dry-run --issue-key DEMO-123 --body "Preview only"
 ```
 
 기존 export가 오래됐는지 확인하고 최신 위키 내용으로 갱신:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env check-page-md-freshness --file "/path/to/notes/page.md"
-./bin/conjira --env-file ./local/agent.env refresh-page-md --file "/path/to/notes/page.md"
+conjira --env-file ./local/agent.env check-page-md-freshness --file "/path/to/notes/page.md"
+conjira --env-file ./local/agent.env refresh-page-md --file "/path/to/notes/page.md"
 ```
 
 Confluence 인라인 코멘트 스레드 요약 export:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/notes"
+conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/notes"
 ```
 
 Jira 검색과 이슈 조회:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
-./bin/conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
+conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
+conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
 ```
 
 예시 출력은 아래처럼 짧고 단순한 JSON 형태입니다. 아래 값은 모두 synthetic example입니다.
@@ -122,7 +124,14 @@ Jira 검색과 이슈 조회:
 이미 `pipx`를 쓰고 있다면 가장 짧은 설치 경로는 아래와 같습니다.
 
 ```bash
-pipx install git+https://github.com/quanttraderkim/conjira-cli.git
+pipx install conjira-cli
+conjira-setup-macos
+```
+
+`pipx`를 쓰지 않는다면 아래처럼 설치해도 됩니다.
+
+```bash
+python3 -m pip install --user conjira-cli
 conjira-setup-macos
 ```
 
@@ -230,8 +239,8 @@ JIRA_PAT_FILE=/path/to/jira.token
 설정 후에는 아래처럼 연결을 확인하면 됩니다.
 
 ```bash
-./bin/conjira --env-file ./local/agent.env auth-check
-./bin/conjira --env-file ./local/agent.env jira-auth-check
+conjira --env-file ./local/agent.env auth-check
+conjira --env-file ./local/agent.env jira-auth-check
 ```
 
 ## 자주 쓰는 명령
@@ -239,73 +248,73 @@ JIRA_PAT_FILE=/path/to/jira.token
 Confluence 페이지 조회:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env get-page --page-id 123456 --expand body.storage,space,version
+conjira --env-file ./local/agent.env get-page --page-id 123456 --expand body.storage,space,version
 ```
 
 Confluence 페이지를 Markdown으로 export:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/work-folder"
+conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/work-folder"
 ```
 
 Confluence 페이지 트리를 중첩 폴더 구조로 export:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-tree-md --page-id 123456 --output-dir "/path/to/work-folder"
+conjira --env-file ./local/agent.env export-tree-md --page-id 123456 --output-dir "/path/to/work-folder"
 ```
 
 Confluence 인라인 코멘트 스레드 export:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/work-folder"
+conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/work-folder"
 ```
 
 Confluence 페이지 생성 및 수정:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "CLI test page" --body-html "<p>Hello from conjira</p>"
-./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-html "<p>Updated by conjira</p>"
+conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "CLI test page" --body-html "<p>Hello from conjira</p>"
+conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-html "<p>Updated by conjira</p>"
 ```
 
 Markdown으로 Confluence 페이지 생성 및 수정:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown "# Demo\n\n- Item A"
-./bin/conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
+conjira --env-file ./local/agent.env create-page --allow-write --space-key DOCS --parent-id 100001 --title "Markdown page" --body-markdown "# Demo\n\n- Item A"
+conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 --append-markdown-file ./notes/update.md
 ```
 
 기존 Confluence 페이지의 특정 섹션 교체:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
+conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
 ```
 
 기존 Confluence 페이지를 다른 부모 페이지 아래로 이동:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env move-page --dry-run --page-id 100002 --new-parent-id 100001
-./bin/conjira --env-file ./local/agent.env move-page --allow-write --page-id 100002 --new-parent-id 100001
+conjira --env-file ./local/agent.env move-page --dry-run --page-id 100002 --new-parent-id 100001
+conjira --env-file ./local/agent.env move-page --allow-write --page-id 100002 --new-parent-id 100001
 ```
 
 Confluence나 Jira 쓰기 작업을 먼저 preview:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env update-page --dry-run --page-id 100002 --append-markdown-file ./notes/update.md
-./bin/conjira --env-file ./local/agent.env jira-create-issue --dry-run --project-key DEMO --issue-type-name Task --summary "Preview issue" --description "No write yet"
+conjira --env-file ./local/agent.env update-page --dry-run --page-id 100002 --append-markdown-file ./notes/update.md
+conjira --env-file ./local/agent.env jira-create-issue --dry-run --project-key DEMO --issue-type-name Task --summary "Preview issue" --description "No write yet"
 ```
 
 Jira 검색과 이슈 조회:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
-./bin/conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
+conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY created DESC' --limit 5
+conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
 ```
 
 Jira 이슈 생성과 댓글 추가:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env jira-create-issue --allow-write --project-key DEMO --issue-type-name Task --summary "CLI issue test" --description "Created from conjira"
-./bin/conjira --env-file ./local/agent.env jira-add-comment --allow-write --issue-key DEMO-123 --body "Comment from conjira"
+conjira --env-file ./local/agent.env jira-create-issue --allow-write --project-key DEMO --issue-type-name Task --summary "CLI issue test" --description "Created from conjira"
+conjira --env-file ./local/agent.env jira-add-comment --allow-write --issue-key DEMO-123 --body "Comment from conjira"
 ```
 
 ## 설정 키
