@@ -14,10 +14,21 @@ _CALLOUT_RE = re.compile(r"^\[!(INFO|NOTE|TIP|WARNING|EXPAND)\](?:\s+(.*))?$", r
 _INLINE_TOKEN_RE = re.compile(
     r"!\[\[(?P<obs_image>[^\]]+)\]\]"
     r"|\[\[(?P<obs_link>[^\]]+)\]\]"
+    r"|:(?i:status)\[(?P<status_title>[^\]]+)\]\{color\s*=\s*(?P<status_color>[^}]+)\}"
     r"|!\[(?P<img_alt>[^\]]*)\]\((?P<img_target>[^)]+)\)"
     r"|\[(?P<link_text>[^\]]+)\]\((?P<link_target>[^)]+)\)"
     r"|`(?P<code>[^`]+)`"
 )
+
+_STATUS_COLOUR_ALIASES = {
+    "blue": "Blue",
+    "green": "Green",
+    "grey": "Grey",
+    "gray": "Grey",
+    "purple": "Purple",
+    "red": "Red",
+    "yellow": "Yellow",
+}
 
 
 def markdown_to_storage_html(
@@ -400,6 +411,10 @@ def _render_token(match: re.Match[str]) -> str:
     if code is not None:
         return "<code>{0}</code>".format(html.escape(code))
 
+    status_title = match.group("status_title")
+    if status_title is not None:
+        return _render_status_macro_token(status_title, match.group("status_color") or "")
+
     obs_image = match.group("obs_image")
     if obs_image is not None:
         target, alias = _split_obsidian_target(obs_image)
@@ -464,6 +479,26 @@ def _render_wikilink(text: str, target: str) -> str:
         '<ac:link><ri:page ri:content-title="{0}" />'
         '<ac:plain-text-link-body><![CDATA[{1}]]></ac:plain-text-link-body></ac:link>'
     ).format(html.escape(target, quote=True), text)
+
+
+def _render_status_macro_token(title: str, colour: str) -> str:
+    normalized_colour = _normalize_status_colour(colour)
+    return (
+        '<ac:structured-macro ac:name="status" ac:schema-version="1">'
+        '<ac:parameter ac:name="colour">{0}</ac:parameter>'
+        '<ac:parameter ac:name="title">{1}</ac:parameter>'
+        "</ac:structured-macro>"
+    ).format(
+        html.escape(normalized_colour, quote=False),
+        html.escape(title.strip(), quote=False),
+    )
+
+
+def _normalize_status_colour(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        return "Grey"
+    return _STATUS_COLOUR_ALIASES.get(stripped.lower(), stripped)
 
 
 def _has_url_scheme(value: str) -> bool:

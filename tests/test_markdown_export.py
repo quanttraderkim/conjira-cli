@@ -177,6 +177,39 @@ class MarkdownExportTests(unittest.TestCase):
         self.assertIn("> Step 1", result)
         self.assertIn("> Step 2", result)
 
+    def test_status_macro_renders_as_inline_status_token(self) -> None:
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+        html = (
+            "<p>Current state: "
+            '<ac:structured-macro ac:name="status" ac:schema-version="1">'
+            '<ac:parameter ac:name="colour">Yellow</ac:parameter>'
+            '<ac:parameter ac:name="title">In Progress</ac:parameter>'
+            "</ac:structured-macro>"
+            "</p>"
+        )
+
+        result = exporter.convert_fragment(html)
+
+        self.assertIn("Current state: :status[In Progress]{color=yellow}", result)
+
+    def test_status_macro_renders_inside_table_cells(self) -> None:
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+        html = (
+            "<table><tbody>"
+            "<tr><th>Item</th><th>Status</th></tr>"
+            "<tr><td>API</td><td>"
+            '<ac:structured-macro ac:name="status" ac:schema-version="1">'
+            '<ac:parameter ac:name="colour">Blue</ac:parameter>'
+            '<ac:parameter ac:name="title">Planned</ac:parameter>'
+            "</ac:structured-macro>"
+            "</td></tr>"
+            "</tbody></table>"
+        )
+
+        result = exporter.convert_fragment(html)
+
+        self.assertIn("| API | :status[Planned]{color=blue} |", result)
+
     def test_malformed_mixed_emphasis_is_flattened(self) -> None:
         exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
         html = "<ul><li><em>Description <strong>emphasis</strong></em></li></ul>"
