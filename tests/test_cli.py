@@ -179,6 +179,67 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["body_source"], "markdown")
         self.assertIn("Demo", payload["body_preview"])
 
+    def test_handle_confluence_export_tree_md_returns_summary(self) -> None:
+        args = SimpleNamespace(
+            command="export-tree-md",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            page_id="12345",
+            output_dir=None,
+            staging_local=True,
+        )
+        settings = ConfluenceSettings(
+            base_url="https://confluence.example.com",
+            token="token",
+            timeout_seconds=30,
+            export_staging_dir="/tmp/conjira-staging",
+        )
+        root_page = {
+            "id": "12345",
+            "type": "page",
+            "title": "Guide",
+            "space": {"key": "DOCS"},
+            "version": {"number": 7},
+            "ancestors": [],
+            "body": {"storage": {"value": "<p>Body</p>"}},
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=12345",
+            },
+        }
+
+        exported = [
+            SimpleNamespace(
+                page_id="12345",
+                title="Guide",
+                output_file="/tmp/conjira-staging/Guide/index.md",
+                source_url="https://confluence.example.com/pages/12345",
+                parent_page_id=None,
+            )
+        ]
+
+        with mock.patch("conjira_cli.cli.build_confluence_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.ConfluenceClient.get_page",
+            return_value=root_page,
+        ) as mock_get_page, mock.patch(
+            "conjira_cli.cli.export_page_tree",
+            return_value=exported,
+        ) as mock_export_tree:
+            payload = _handle_confluence(args)
+
+        self.assertEqual(payload["page_id"], "12345")
+        self.assertEqual(payload["title"], "Guide")
+        self.assertEqual(payload["exported_count"], 1)
+        self.assertEqual(payload["root_output_dir"], "/tmp/conjira-staging/Guide")
+        self.assertTrue(payload["used_staging_local"])
+        mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space,ancestors")
+        mock_export_tree.assert_called_once()
+
     def test_handle_confluence_update_page_dry_run_uses_live_page_without_write(self) -> None:
         args = SimpleNamespace(
             command="update-page",

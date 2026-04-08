@@ -215,6 +215,12 @@ Confluence 페이지를 Markdown으로 export:
 ./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/work-folder"
 ```
 
+Confluence 페이지 트리를 중첩 폴더 구조로 export:
+
+```bash
+./bin/conjira --env-file ./local/agent.env export-tree-md --page-id 123456 --output-dir "/path/to/work-folder"
+```
+
 Confluence 인라인 코멘트 스레드 export:
 
 ```bash
