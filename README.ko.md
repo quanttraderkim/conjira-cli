@@ -117,6 +117,15 @@ Jira 검색과 이슈 조회:
 
 ## 5분 안에 시작하기
 
+이미 `pipx`를 쓰고 있다면 가장 짧은 설치 경로는 아래와 같습니다.
+
+```bash
+pipx install git+https://github.com/quanttraderkim/conjira-cli.git
+conjira-setup-macos
+```
+
+직접 clone해서 설치하려면 아래 순서를 사용하시면 됩니다.
+
 ```bash
 git clone https://github.com/quanttraderkim/conjira-cli.git
 cd conjira-cli
@@ -139,11 +148,33 @@ pip install -e .
 cp ./local/agent.env.example ./local/agent.env
 ```
 
+macOS에서는 `local/agent.env`를 직접 편집하지 않고, 아래 setup 스크립트로 Keychain 기반 설정을 한 번에 할 수 있습니다.
+
+```bash
+conjira-setup-macos
+```
+
+이 스크립트는 PAT를 macOS Keychain에 저장하고, `local/agent.env`에는 비밀이 아닌 설정만 기록하며, 마지막에 `auth-check`까지 실행할 수 있습니다.
+`~/.zshrc` 같은 셸 프로필 파일에 PAT 값을 쓰지는 않습니다.
+아직 엔트리포인트를 설치하지 않은 source checkout 상태라면 아래 wrapper도 사용할 수 있습니다.
+
+```bash
+bash scripts/setup-conjira-macos.sh
+```
+
 ## 자격 증명 관리
 
 운영체제에 따라 권장 방식이 조금 다릅니다.
 
 macOS에서는 PAT를 Keychain에 넣고, `local/agent.env`에는 base URL이나 export 경로 같은 비밀이 아닌 값만 두는 구성이 가장 편합니다.
+
+macOS에서 가장 쉬운 경로는 아래 setup 스크립트를 실행하는 것입니다.
+
+```bash
+conjira-setup-macos
+```
+
+직접 설정하고 싶다면 아래 수동 Keychain 방식을 사용하시면 됩니다.
 
 ```dotenv
 CONFLUENCE_BASE_URL=https://confluence.example.com

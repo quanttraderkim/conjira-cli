@@ -117,6 +117,15 @@ Short sample output blocks, using synthetic values:
 
 ## Set up in about 5 minutes
 
+If you already use `pipx`, the shortest install path is:
+
+```bash
+pipx install git+https://github.com/quanttraderkim/conjira-cli.git
+conjira-setup-macos
+```
+
+Or install from a local checkout:
+
 ```bash
 git clone https://github.com/quanttraderkim/conjira-cli.git
 cd conjira-cli
@@ -139,11 +148,33 @@ Create a local config file:
 cp ./local/agent.env.example ./local/agent.env
 ```
 
+On macOS, you can do the first-time Keychain-based setup with one script instead of editing `local/agent.env` by hand:
+
+```bash
+conjira-setup-macos
+```
+
+The script stores PATs in macOS Keychain, writes only non-secret settings to `local/agent.env`, and can run `auth-check` for you at the end.
+It does not write PAT values to `~/.zshrc` or other shell profile files.
+If you are running directly from a source checkout before installing entrypoints, you can still use:
+
+```bash
+bash scripts/setup-conjira-macos.sh
+```
+
 ## Credential handling
 
 The recommended setup depends on your OS.
 
 On macOS, the best local experience is to keep PATs in Keychain and store only non-secret machine settings in `local/agent.env`.
+
+If you want the easiest path on macOS, run:
+
+```bash
+conjira-setup-macos
+```
+
+If you prefer to set everything manually, use the Keychain flow below.
 
 ```dotenv
 CONFLUENCE_BASE_URL=https://confluence.example.com
