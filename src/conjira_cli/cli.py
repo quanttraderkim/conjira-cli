@@ -48,10 +48,14 @@ def _read_confluence_body_arg(
     html_file: Optional[str],
     raw_markdown: Optional[str],
     markdown_file: Optional[str],
+    mermaid_macro_name: Optional[str] = None,
 ) -> str:
     if raw_html is not None or html_file is not None:
         return _read_text_arg(raw_html, html_file)
-    return markdown_to_storage_html(_read_text_arg(raw_markdown, markdown_file))
+    return markdown_to_storage_html(
+        _read_text_arg(raw_markdown, markdown_file),
+        mermaid_macro_name=mermaid_macro_name,
+    )
 
 
 def _read_optional_confluence_body_arg(
@@ -59,10 +63,17 @@ def _read_optional_confluence_body_arg(
     html_file: Optional[str],
     raw_markdown: Optional[str],
     markdown_file: Optional[str],
+    mermaid_macro_name: Optional[str] = None,
 ) -> Optional[str]:
     if all(value is None for value in [raw_html, html_file, raw_markdown, markdown_file]):
         return None
-    return _read_confluence_body_arg(raw_html, html_file, raw_markdown, markdown_file)
+    return _read_confluence_body_arg(
+        raw_html,
+        html_file,
+        raw_markdown,
+        markdown_file,
+        mermaid_macro_name=mermaid_macro_name,
+    )
 
 
 def _truncate_preview(value: str, limit: int = 240) -> str:
@@ -790,7 +801,11 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
     if args.command == "export-page-md":
         page = client.get_page(args.page_id, expand="body.storage,version,space")
         payload = _page_export_payload(page)
-        exporter = MarkdownExporter(base_url=settings.base_url, page_id=args.page_id)
+        exporter = MarkdownExporter(
+            base_url=settings.base_url,
+            page_id=args.page_id,
+            mermaid_macro_name=settings.mermaid_macro_name,
+        )
         markdown = exporter.convert_page(payload)
         output_path = _resolve_export_output_path(
             title=payload["title"] or "Untitled",
@@ -844,6 +859,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             ),
             list_child_pages=client.list_child_pages,
             base_url=settings.base_url,
+            mermaid_macro_name=settings.mermaid_macro_name,
         )
         root_dir = str(output_base / sanitize_path_component(root_payload["title"] or "Untitled"))
         return {
@@ -889,7 +905,11 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         page = client.get_page(str(metadata["page_id"]), expand="body.storage,version,space")
         payload = client.summarize_page(page)
         payload["body_html"] = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
-        exporter = MarkdownExporter(base_url=settings.base_url, page_id=str(metadata["page_id"]))
+        exporter = MarkdownExporter(
+            base_url=settings.base_url,
+            page_id=str(metadata["page_id"]),
+            mermaid_macro_name=settings.mermaid_macro_name,
+        )
         markdown = exporter.convert_page(payload)
         file_path.write_text(markdown, encoding="utf-8")
         return {
@@ -958,6 +978,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             args.body_file,
             args.body_markdown,
             args.body_markdown_file,
+            mermaid_macro_name=settings.mermaid_macro_name,
         )
         body_source = _confluence_body_source(
             raw_html=args.body_html,
@@ -991,12 +1012,14 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             args.body_file,
             args.body_markdown,
             args.body_markdown_file,
+            mermaid_macro_name=settings.mermaid_macro_name,
         )
         append_html = _read_optional_confluence_body_arg(
             args.append_html,
             args.append_file,
             args.append_markdown,
             args.append_markdown_file,
+            mermaid_macro_name=settings.mermaid_macro_name,
         )
         if new_body_html is None and append_html is None and args.title is None:
             raise ConfigError(
@@ -1040,6 +1063,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             args.section_file,
             args.section_markdown,
             args.section_markdown_file,
+            mermaid_macro_name=settings.mermaid_macro_name,
         )
         page = client.get_page(args.page_id, expand="body.storage,version,space")
         current_body = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""

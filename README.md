@@ -156,6 +156,8 @@ CONFLUENCE_PAT_KEYCHAIN_SERVICE=conjira-cli
 CONFLUENCE_PAT_KEYCHAIN_ACCOUNT=confluence-prod
 CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes/wiki-exports
 CONFLUENCE_EXPORT_STAGING_DIR=/absolute/path/to/conjira-cli/local/exports
+# Optional: convert ```mermaid fences to a Confluence Mermaid macro
+# CONFLUENCE_MERMAID_MACRO_NAME=mermaid-macro
 
 JIRA_BASE_URL=https://jira.example.com
 JIRA_PAT_KEYCHAIN_SERVICE=conjira-cli
@@ -184,6 +186,8 @@ On Linux or Windows, use environment variables or token files instead of Keychai
 CONFLUENCE_BASE_URL=https://confluence.example.com
 CONFLUENCE_PAT=your-confluence-pat
 CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes
+# Optional: convert ```mermaid fences to a Confluence Mermaid macro
+# CONFLUENCE_MERMAID_MACRO_NAME=mermaid-macro
 
 JIRA_BASE_URL=https://jira.example.com
 JIRA_PAT=your-jira-pat

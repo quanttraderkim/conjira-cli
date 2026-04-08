@@ -106,6 +106,7 @@ def _normalize_table_header(value: str) -> str:
 class MarkdownExporter:
     base_url: str
     page_id: str
+    mermaid_macro_name: str | None = None
 
     def convert_page(self, page: dict[str, Any]) -> str:
         title = page.get("title") or "Untitled"
@@ -163,8 +164,11 @@ class MarkdownExporter:
     def _render_block(self, elem: ET.Element, *, indent: int) -> str:
         name = _local_name(elem.tag)
         if name == "structured-macro":
-            if elem.attrib.get("{urn:ac}name") == "toc":
+            macro_name = elem.attrib.get("{urn:ac}name")
+            if macro_name == "toc":
                 return ""
+            if self.mermaid_macro_name and macro_name == self.mermaid_macro_name:
+                return self._render_mermaid_macro(elem)
             return self._render_children(elem, indent=indent)
         if name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             level = int(name[1])
@@ -445,6 +449,17 @@ class MarkdownExporter:
             quoted,
         )
         return f"![{attachment_name}]({url})\n\n"
+
+    def _render_mermaid_macro(self, elem: ET.Element) -> str:
+        text = self._extract_macro_plain_text_body(elem).strip("\n")
+        return f"```mermaid\n{text}\n```\n\n" if text else "```mermaid\n```\n\n"
+
+    @staticmethod
+    def _extract_macro_plain_text_body(elem: ET.Element) -> str:
+        for child in elem.iter():
+            if _local_name(child.tag) == "plain-text-body":
+                return child.text or ""
+        return ""
 
     @staticmethod
     def _contains_emphasis_child(elem: ET.Element) -> bool:

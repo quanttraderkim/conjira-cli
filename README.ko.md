@@ -156,6 +156,8 @@ CONFLUENCE_PAT_KEYCHAIN_SERVICE=conjira-cli
 CONFLUENCE_PAT_KEYCHAIN_ACCOUNT=confluence-prod
 CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes/wiki-exports
 CONFLUENCE_EXPORT_STAGING_DIR=/absolute/path/to/conjira-cli/local/exports
+# 선택: ```mermaid fenced block을 Confluence Mermaid 매크로로 변환
+# CONFLUENCE_MERMAID_MACRO_NAME=mermaid-macro
 
 JIRA_BASE_URL=https://jira.example.com
 JIRA_PAT_KEYCHAIN_SERVICE=conjira-cli
@@ -184,6 +186,8 @@ Linux나 Windows에서는 Keychain 대신 환경변수나 token file을 쓰면 �
 CONFLUENCE_BASE_URL=https://confluence.example.com
 CONFLUENCE_PAT=your-confluence-pat
 CONFLUENCE_EXPORT_DEFAULT_DIR=/path/to/notes
+# 선택: ```mermaid fenced block을 Confluence Mermaid 매크로로 변환
+# CONFLUENCE_MERMAID_MACRO_NAME=mermaid-macro
 
 JIRA_BASE_URL=https://jira.example.com
 JIRA_PAT=your-jira-pat

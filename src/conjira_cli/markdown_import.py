@@ -19,10 +19,14 @@ _INLINE_TOKEN_RE = re.compile(
 )
 
 
-def markdown_to_storage_html(markdown: str) -> str:
+def markdown_to_storage_html(
+    markdown: str,
+    *,
+    mermaid_macro_name: Optional[str] = None,
+) -> str:
     markdown = _strip_frontmatter(markdown).replace("\r\n", "\n").replace("\r", "\n")
     lines = markdown.split("\n")
-    html_parts, _ = _parse_blocks(lines, 0)
+    html_parts, _ = _parse_blocks(lines, 0, mermaid_macro_name=mermaid_macro_name)
     return "".join(html_parts).strip()
 
 
@@ -37,7 +41,13 @@ def _strip_frontmatter(markdown: str) -> str:
     return markdown
 
 
-def _parse_blocks(lines: list[str], start: int, *, stop_on_indent: Optional[int] = None) -> tuple[list[str], int]:
+def _parse_blocks(
+    lines: list[str],
+    start: int,
+    *,
+    stop_on_indent: Optional[int] = None,
+    mermaid_macro_name: Optional[str] = None,
+) -> tuple[list[str], int]:
     parts: list[str] = []
     i = start
 
@@ -67,7 +77,7 @@ def _parse_blocks(lines: list[str], start: int, *, stop_on_indent: Optional[int]
             continue
 
         if stripped.startswith("```"):
-            block, i = _parse_fenced_code(lines, i)
+            block, i = _parse_fenced_code(lines, i, mermaid_macro_name=mermaid_macro_name)
             parts.append(block)
             continue
 
@@ -92,7 +102,12 @@ def _parse_blocks(lines: list[str], start: int, *, stop_on_indent: Optional[int]
     return parts, i
 
 
-def _parse_fenced_code(lines: list[str], start: int) -> tuple[str, int]:
+def _parse_fenced_code(
+    lines: list[str],
+    start: int,
+    *,
+    mermaid_macro_name: Optional[str] = None,
+) -> tuple[str, int]:
     opening = lines[start].strip()
     fence = opening[:3]
     language = opening[3:].strip() or "none"
@@ -100,10 +115,29 @@ def _parse_fenced_code(lines: list[str], start: int) -> tuple[str, int]:
     i = start + 1
     while i < len(lines):
         if lines[i].strip().startswith(fence):
-            return _render_code_macro("\n".join(code_lines), language), i + 1
+            return _render_fenced_block(
+                code="\n".join(code_lines),
+                language=language,
+                mermaid_macro_name=mermaid_macro_name,
+            ), i + 1
         code_lines.append(lines[i])
         i += 1
-    return _render_code_macro("\n".join(code_lines), language), i
+    return _render_fenced_block(
+        code="\n".join(code_lines),
+        language=language,
+        mermaid_macro_name=mermaid_macro_name,
+    ), i
+
+
+def _render_fenced_block(
+    *,
+    code: str,
+    language: str,
+    mermaid_macro_name: Optional[str],
+) -> str:
+    if mermaid_macro_name and language.lower() == "mermaid":
+        return _render_mermaid_macro(code, mermaid_macro_name)
+    return _render_code_macro(code, language)
 
 
 def _render_code_macro(code: str, language: str) -> str:
@@ -116,6 +150,16 @@ def _render_code_macro(code: str, language: str) -> str:
         "<ac:plain-text-body><![CDATA[{1}]]></ac:plain-text-body>"
         "</ac:structured-macro>"
     ).format(safe_language, cdata_code)
+
+
+def _render_mermaid_macro(code: str, macro_name: str) -> str:
+    safe_macro_name = html.escape(macro_name, quote=True)
+    cdata_code = code.replace("]]>", "]]]]><![CDATA[>")
+    return (
+        '<ac:structured-macro ac:name="{0}" ac:schema-version="1">'
+        "<ac:plain-text-body><![CDATA[{1}]]></ac:plain-text-body>"
+        "</ac:structured-macro>"
+    ).format(safe_macro_name, cdata_code)
 
 
 def _parse_paragraph(
