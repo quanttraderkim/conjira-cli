@@ -18,7 +18,7 @@ English version: [README.md](README.md)
 
 `conjira-cli`는 그 틈을 메우기 위해 만들었습니다. Confluence 페이지 읽기, Markdown 내보내기, 오래된 export 갱신, 인라인 코멘트 스레드 요약, Jira JQL 검색, 문서와 이슈 생성 및 수정 같은 작업을 PAT를 소스 파일이나 채팅에 직접 남기지 않고 처리할 수 있습니다.
 
-또한 보고용 문서에서는 Markdown을 원본으로 유지하면서도 일부 Confluence 전용 표현을 살릴 수 있습니다. 현재는 Mermaid와 `> [!INFO]`, `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]` 같은 Markdown 콜아웃 문법을 Confluence 매크로와 왕복할 수 있습니다.
+또한 보고용 문서에서는 Markdown을 원본으로 유지하면서도 일부 Confluence 전용 표현을 살릴 수 있습니다. 현재는 Mermaid와 `> [!INFO]`, `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]` 같은 Markdown 콜아웃 문법, 그리고 `> [!EXPAND]` 형태의 펼치기 블록을 Confluence 매크로와 왕복할 수 있습니다.
 
 ## 할 수 있는 일
 

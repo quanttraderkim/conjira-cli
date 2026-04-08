@@ -59,7 +59,7 @@ _STRUCTURED_TABLE_CONTENT_HEADERS = {
     "요약",
 }
 
-_CALLOUT_MACRO_NAMES = {"info", "note", "tip", "warning"}
+_CALLOUT_MACRO_NAMES = {"info", "note", "tip", "warning", "expand"}
 
 
 def _local_name(tag: str) -> str:
@@ -461,7 +461,8 @@ class MarkdownExporter:
     def _render_callout_macro(self, elem: ET.Element, macro_name: str) -> str:
         title = self._extract_macro_parameter(elem, "title")
         rich_body = self._extract_macro_rich_text_body(elem).strip()
-        header = f"> [!{macro_name.upper()}]"
+        label = "EXPAND" if macro_name == "expand" else macro_name.upper()
+        header = f"> [!{label}]"
         if title:
             header += f" {title}"
 

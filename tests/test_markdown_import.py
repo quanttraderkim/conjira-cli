@@ -110,3 +110,21 @@ class MarkdownImportTests(unittest.TestCase):
         self.assertIn("<ac:rich-text-body>", result)
         self.assertIn("<p>Use a PAT stored in Keychain.</p>", result)
         self.assertIn("<p>Run auth-check after setup.</p>", result)
+
+    def test_markdown_to_storage_html_renders_expand_macro(self) -> None:
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "> [!EXPAND] Detailed rollout plan",
+                    "> Step 1",
+                    ">",
+                    "> Step 2",
+                ]
+            )
+        )
+
+        self.assertIn('<ac:structured-macro ac:name="expand"', result)
+        self.assertIn('<ac:parameter ac:name="title">Detailed rollout plan</ac:parameter>', result)
+        self.assertIn("<ac:rich-text-body>", result)
+        self.assertIn("<p>Step 1</p>", result)
+        self.assertIn("<p>Step 2</p>", result)
