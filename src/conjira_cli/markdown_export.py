@@ -59,6 +59,8 @@ _STRUCTURED_TABLE_CONTENT_HEADERS = {
     "요약",
 }
 
+_CALLOUT_MACRO_NAMES = {"info", "note", "tip", "warning"}
+
 
 def _local_name(tag: str) -> str:
     if "}" in tag:
@@ -169,6 +171,8 @@ class MarkdownExporter:
                 return ""
             if self.mermaid_macro_name and macro_name == self.mermaid_macro_name:
                 return self._render_mermaid_macro(elem)
+            if macro_name in _CALLOUT_MACRO_NAMES:
+                return self._render_callout_macro(elem, macro_name)
             return self._render_children(elem, indent=indent)
         if name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             level = int(name[1])
@@ -454,11 +458,40 @@ class MarkdownExporter:
         text = self._extract_macro_plain_text_body(elem).strip("\n")
         return f"```mermaid\n{text}\n```\n\n" if text else "```mermaid\n```\n\n"
 
+    def _render_callout_macro(self, elem: ET.Element, macro_name: str) -> str:
+        title = self._extract_macro_parameter(elem, "title")
+        rich_body = self._extract_macro_rich_text_body(elem).strip()
+        header = f"> [!{macro_name.upper()}]"
+        if title:
+            header += f" {title}"
+
+        if not rich_body:
+            return header + "\n\n"
+
+        quoted_body = self._prefix_blockquote(rich_body)
+        return f"{header}\n{quoted_body}\n\n"
+
     @staticmethod
     def _extract_macro_plain_text_body(elem: ET.Element) -> str:
         for child in elem.iter():
             if _local_name(child.tag) == "plain-text-body":
                 return child.text or ""
+        return ""
+
+    def _extract_macro_rich_text_body(self, elem: ET.Element) -> str:
+        for child in list(elem):
+            if _local_name(child.tag) == "rich-text-body":
+                return self._render_blocks(list(child), indent=0)
+        return ""
+
+    @staticmethod
+    def _extract_macro_parameter(elem: ET.Element, param_name: str) -> str:
+        for child in list(elem):
+            if _local_name(child.tag) != "parameter":
+                continue
+            if child.attrib.get("{urn:ac}name") != param_name:
+                continue
+            return _collapse_inline("".join(child.itertext()))
         return ""
 
     @staticmethod
@@ -503,3 +536,8 @@ class MarkdownExporter:
     def _indent_text(value: str, *, spaces: int) -> str:
         prefix = " " * spaces
         return "\n".join(prefix + line if line else line for line in value.splitlines())
+
+    @staticmethod
+    def _prefix_blockquote(value: str) -> str:
+        lines = value.rstrip().splitlines()
+        return "\n".join("> " + line if line else ">" for line in lines)
