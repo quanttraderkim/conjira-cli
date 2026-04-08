@@ -59,6 +59,12 @@ Export to a known work folder:
 ./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/work-folder"
 ```
 
+Export a Confluence page tree to nested work folders:
+
+```bash
+./bin/conjira --env-file ./local/agent.env export-tree-md --page-id 123456 --output-dir "/path/to/work-folder"
+```
+
 Export to staging under `local/exports`:
 
 ```bash

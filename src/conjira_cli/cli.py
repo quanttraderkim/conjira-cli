@@ -24,6 +24,7 @@ from conjira_cli.inline_comments import render_inline_comment_summary_markdown
 from conjira_cli.markdown_export import MarkdownExporter
 from conjira_cli.markdown_import import markdown_to_storage_html
 from conjira_cli.section_edit import SectionEditError, replace_section_html
+from conjira_cli.tree_export import export_page_tree, sanitize_path_component
 
 
 def _read_text_arg(raw_text: Optional[str], file_path: Optional[str]) -> str:
@@ -142,6 +143,13 @@ def _read_export_metadata(path: Path) -> Dict[str, Any]:
     }
 
 
+def _page_export_payload(page: Dict[str, Any]) -> Dict[str, Any]:
+    payload = ConfluenceClient.summarize_page(page)
+    payload["body_html"] = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
+    payload["ancestors"] = page.get("ancestors") or []
+    return payload
+
+
 def _default_export_staging_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "local" / "exports"
 
@@ -211,6 +219,14 @@ def _build_parser() -> argparse.ArgumentParser:
     export_page_md.add_argument("--output-dir")
     export_page_md.add_argument("--filename")
     export_page_md.add_argument("--staging-local", action="store_true")
+
+    export_tree_md = subparsers.add_parser(
+        "export-tree-md",
+        help="Export a Confluence page tree to nested Markdown folders",
+    )
+    export_tree_md.add_argument("--page-id", required=True)
+    export_tree_md.add_argument("--output-dir")
+    export_tree_md.add_argument("--staging-local", action="store_true")
 
     check_page_md_freshness = subparsers.add_parser(
         "check-page-md-freshness",
@@ -773,8 +789,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         return payload
     if args.command == "export-page-md":
         page = client.get_page(args.page_id, expand="body.storage,version,space")
-        payload = client.summarize_page(page)
-        payload["body_html"] = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
+        payload = _page_export_payload(page)
         exporter = MarkdownExporter(base_url=settings.base_url, page_id=args.page_id)
         markdown = exporter.convert_page(payload)
         output_path = _resolve_export_output_path(
@@ -794,6 +809,59 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             "output_file": str(output_path),
             "source_url": payload["webui_url"],
             "used_staging_local": str(output_path).startswith(
+                str((Path(settings.export_staging_dir) if settings.export_staging_dir else _default_export_staging_dir()))
+            ),
+        }
+    if args.command == "export-tree-md":
+        root_page = client.get_page(args.page_id, expand="body.storage,version,space,ancestors")
+        root_payload = _page_export_payload(root_page)
+        output_base = (
+            Path(args.output_dir)
+            if args.output_dir
+            else (
+                Path(settings.export_staging_dir)
+                if args.staging_local and settings.export_staging_dir
+                else (
+                    _default_export_staging_dir()
+                    if args.staging_local
+                    else (
+                        Path(settings.export_default_dir)
+                        if settings.export_default_dir
+                        else None
+                    )
+                )
+            )
+        )
+        if output_base is None:
+            raise ConfigError(
+                "Tree export requires --output-dir, or CONFLUENCE_EXPORT_DEFAULT_DIR, or --staging-local."
+            )
+        exported = export_page_tree(
+            root_page=root_payload,
+            output_dir=output_base,
+            fetch_page=lambda page_id: _page_export_payload(
+                client.get_page(page_id, expand="body.storage,version,space,ancestors")
+            ),
+            list_child_pages=client.list_child_pages,
+            base_url=settings.base_url,
+        )
+        root_dir = str(output_base / sanitize_path_component(root_payload["title"] or "Untitled"))
+        return {
+            "page_id": args.page_id,
+            "title": root_payload["title"],
+            "root_output_dir": root_dir,
+            "exported_count": len(exported),
+            "exported_pages": [
+                {
+                    "page_id": item.page_id,
+                    "title": item.title,
+                    "output_file": item.output_file,
+                    "source_url": item.source_url,
+                    "parent_page_id": item.parent_page_id,
+                }
+                for item in exported
+            ],
+            "used_staging_local": str(output_base).startswith(
                 str((Path(settings.export_staging_dir) if settings.export_staging_dir else _default_export_staging_dir()))
             ),
         }

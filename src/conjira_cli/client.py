@@ -124,6 +124,42 @@ class ConfluenceClient(BaseAtlassianClient):
         query = {"expand": expand} if expand else None
         return self.request("GET", "/rest/api/content/{0}".format(page_id), query=query)
 
+    def get_child_pages(
+        self,
+        page_id: str,
+        *,
+        limit: int = 200,
+        start: int = 0,
+    ) -> Dict[str, Any]:
+        return self.request(
+            "GET",
+            "/rest/api/content/{0}/child/page".format(page_id),
+            query={"limit": limit, "start": start},
+        )
+
+    def list_child_pages(
+        self,
+        page_id: str,
+        *,
+        limit: int = 200,
+    ) -> list[Dict[str, Any]]:
+        pages: list[Dict[str, Any]] = []
+        start = 0
+
+        while True:
+            result = self.get_child_pages(page_id, limit=limit, start=start)
+            batch = result.get("results", []) if isinstance(result, dict) else []
+            if not batch:
+                break
+            pages.extend(batch)
+
+            batch_size = len(batch)
+            if batch_size < limit:
+                break
+            start += batch_size
+
+        return pages
+
     def create_page(
         self,
         *,

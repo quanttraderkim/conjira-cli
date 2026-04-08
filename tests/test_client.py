@@ -134,3 +134,19 @@ class ClientTests(unittest.TestCase):
 
         self.assertEqual([comment["id"] for comment in comments], ["1", "2", "3"])
         self.assertEqual(mock_get_inline_comments.call_count, 2)
+
+    def test_list_child_pages_fetches_all_pages(self) -> None:
+        client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
+
+        with mock.patch.object(
+            client,
+            "get_child_pages",
+            side_effect=[
+                {"results": [{"id": "1"}, {"id": "2"}]},
+                {"results": [{"id": "3"}]},
+            ],
+        ) as mock_get_child_pages:
+            pages = client.list_child_pages("123", limit=2)
+
+        self.assertEqual([page["id"] for page in pages], ["1", "2", "3"])
+        self.assertEqual(mock_get_child_pages.call_count, 2)

@@ -23,6 +23,21 @@ class MarkdownExportTests(unittest.TestCase):
         self.assertIn("B", result)
         self.assertIn("![demo.png](https://confluence.example.com/download/attachments/123/demo.png)", result)
 
+    def test_convert_page_includes_parent_page_id_when_present(self) -> None:
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+
+        result = exporter.convert_page(
+            {
+                "title": "Demo",
+                "version": 7,
+                "webui_url": "https://confluence.example.com/pages/123",
+                "body_html": "<p>Hello</p>",
+                "parent_page_id": "100",
+            }
+        )
+
+        self.assertIn("confluence_parent_page_id: 100", result)
+
     def test_structured_table_renders_as_sections(self) -> None:
         exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
         html = (

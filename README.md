@@ -215,6 +215,12 @@ Export a Confluence page to Markdown:
 ./bin/conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/work-folder"
 ```
 
+Export a Confluence page tree to nested Markdown folders:
+
+```bash
+./bin/conjira --env-file ./local/agent.env export-tree-md --page-id 123456 --output-dir "/path/to/work-folder"
+```
+
 Export grouped inline comment threads:
 
 ```bash

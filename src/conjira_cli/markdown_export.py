@@ -111,6 +111,7 @@ class MarkdownExporter:
         title = page.get("title") or "Untitled"
         source_url = page.get("webui_url") or ""
         version = page.get("version")
+        parent_page_id = page.get("parent_page_id")
         body_html = page.get("body_html") or ""
         body_md = self.convert_fragment(body_html)
 
@@ -119,6 +120,11 @@ class MarkdownExporter:
             f'title: "{title.replace(chr(34), chr(39))}"',
             f"confluence_page_id: {self.page_id}",
             f"confluence_version: {version}",
+        ]
+        if parent_page_id:
+            parts.append(f"confluence_parent_page_id: {parent_page_id}")
+        parts.extend(
+            [
             f"source_url: {source_url}",
             f"exported_at: {datetime.now().astimezone().isoformat(timespec='seconds')}",
             "---",
@@ -129,7 +135,8 @@ class MarkdownExporter:
             "",
             body_md.strip(),
             "",
-        ]
+            ]
+        )
         return "\n".join(parts)
 
     def convert_fragment(self, body_html: str) -> str:
