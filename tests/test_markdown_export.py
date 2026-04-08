@@ -113,6 +113,34 @@ class MarkdownExportTests(unittest.TestCase):
 
         self.assertIn("See image\n\n![demo.png]", result)
 
+    def test_mermaid_macro_renders_as_fenced_block_when_configured(self) -> None:
+        exporter = MarkdownExporter(
+            base_url="https://confluence.example.com",
+            page_id="123",
+            mermaid_macro_name="mermaid-macro",
+        )
+        html = (
+            '<ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">'
+            "<ac:plain-text-body><![CDATA[graph TD\nA-->B]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+        )
+
+        result = exporter.convert_fragment(html)
+
+        self.assertIn("```mermaid\ngraph TD\nA-->B\n```", result)
+
+    def test_mermaid_macro_is_ignored_without_config(self) -> None:
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+        html = (
+            '<ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">'
+            "<ac:plain-text-body><![CDATA[graph TD\nA-->B]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+        )
+
+        result = exporter.convert_fragment(html)
+
+        self.assertEqual(result.strip(), "")
+
     def test_malformed_mixed_emphasis_is_flattened(self) -> None:
         exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
         html = "<ul><li><em>Description <strong>emphasis</strong></em></li></ul>"

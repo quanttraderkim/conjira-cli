@@ -33,6 +33,7 @@ def export_page_tree(
     fetch_page: Callable[[str], dict[str, Any]],
     list_child_pages: Callable[[str], Iterable[dict[str, Any]]],
     base_url: str,
+    mermaid_macro_name: str | None = None,
 ) -> list[ExportedTreePage]:
     exported: list[ExportedTreePage] = []
 
@@ -45,7 +46,11 @@ def export_page_tree(
         ancestors = page.get("ancestors") or []
         parent_page_id = ancestors[-1].get("id") if ancestors else None
 
-        exporter = MarkdownExporter(base_url=base_url, page_id=page_id)
+        exporter = MarkdownExporter(
+            base_url=base_url,
+            page_id=page_id,
+            mermaid_macro_name=mermaid_macro_name,
+        )
         markdown = exporter.convert_page(
             {
                 **page,

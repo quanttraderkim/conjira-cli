@@ -25,6 +25,7 @@ class ConfluenceSettings(BaseSettings):
     allowed_page_ids: Optional[Set[str]] = None
     export_default_dir: Optional[str] = None
     export_staging_dir: Optional[str] = None
+    mermaid_macro_name: Optional[str] = None
 
 
 @dataclass
@@ -190,6 +191,10 @@ def build_confluence_settings(
         os.environ.get("CONFLUENCE_EXPORT_STAGING_DIR")
         or env.get("CONFLUENCE_EXPORT_STAGING_DIR")
     )
+    mermaid_macro_name = (
+        os.environ.get("CONFLUENCE_MERMAID_MACRO_NAME")
+        or env.get("CONFLUENCE_MERMAID_MACRO_NAME")
+    )
 
     return ConfluenceSettings(
         base_url=resolved_base_url.rstrip("/"),
@@ -200,6 +205,7 @@ def build_confluence_settings(
         allowed_page_ids=allowed_page_ids,
         export_default_dir=export_default_dir,
         export_staging_dir=export_staging_dir,
+        mermaid_macro_name=mermaid_macro_name,
     )
 
 

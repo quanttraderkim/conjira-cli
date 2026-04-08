@@ -27,7 +27,8 @@ class ConfigTests(unittest.TestCase):
                 "CONFLUENCE_PAT=token\n"
                 "CONFLUENCE_TIMEOUT_SECONDS=45\n"
                 "CONFLUENCE_EXPORT_DEFAULT_DIR=/vault/inbox\n"
-                "CONFLUENCE_EXPORT_STAGING_DIR=/tmp/staging\n",
+                "CONFLUENCE_EXPORT_STAGING_DIR=/tmp/staging\n"
+                "CONFLUENCE_MERMAID_MACRO_NAME=mermaid-macro\n",
                 encoding="utf-8",
             )
             settings = build_settings(
@@ -45,6 +46,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(settings.timeout_seconds, 45)
         self.assertEqual(settings.export_default_dir, "/vault/inbox")
         self.assertEqual(settings.export_staging_dir, "/tmp/staging")
+        self.assertEqual(settings.mermaid_macro_name, "mermaid-macro")
 
     def test_build_settings_uses_token_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

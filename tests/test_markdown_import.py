@@ -60,3 +60,35 @@ class MarkdownImportTests(unittest.TestCase):
         self.assertIn('<ac:structured-macro ac:name="code"', result)
         self.assertIn('<ac:parameter ac:name="language">python</ac:parameter>', result)
         self.assertIn("<![CDATA[print('ok')]]>", result)
+
+    def test_markdown_to_storage_html_renders_mermaid_macro_when_configured(self) -> None:
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "```mermaid",
+                    "graph TD",
+                    "A-->B",
+                    "```",
+                ]
+            ),
+            mermaid_macro_name="mermaid-macro",
+        )
+
+        self.assertIn('<ac:structured-macro ac:name="mermaid-macro"', result)
+        self.assertIn("<![CDATA[graph TD\nA-->B]]>", result)
+        self.assertNotIn('<ac:structured-macro ac:name="code"', result)
+
+    def test_markdown_to_storage_html_keeps_mermaid_as_code_without_config(self) -> None:
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "```mermaid",
+                    "graph TD",
+                    "A-->B",
+                    "```",
+                ]
+            )
+        )
+
+        self.assertIn('<ac:structured-macro ac:name="code"', result)
+        self.assertIn('<ac:parameter ac:name="language">mermaid</ac:parameter>', result)
