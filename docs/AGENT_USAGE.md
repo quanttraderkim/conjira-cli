@@ -119,6 +119,13 @@ Preview the same section replacement before writing:
 ./bin/conjira --env-file ./local/agent.env replace-section --dry-run --page-id 100002 --heading "Rollout plan" --section-markdown-file "/path/to/rollout.md"
 ```
 
+Move an existing Confluence page to a new parent:
+
+```bash
+./bin/conjira --env-file ./local/agent.env move-page --dry-run --page-id 100002 --new-parent-id 100001
+./bin/conjira --env-file ./local/agent.env move-page --allow-write --page-id 100002 --new-parent-id 100001
+```
+
 Update an approved Confluence page:
 
 ```bash

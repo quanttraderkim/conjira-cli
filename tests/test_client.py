@@ -29,6 +29,27 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(payload["version"]["number"], 8)
         self.assertEqual(payload["body"]["storage"]["value"], "<p>New body</p>")
 
+    def test_update_page_from_snapshot_can_change_parent(self) -> None:
+        client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
+        snapshot = {
+            "id": "123",
+            "type": "page",
+            "title": "Demo",
+            "space": {"key": "TEST"},
+            "version": {"number": 7},
+            "body": {"storage": {"value": "<p>Old body</p>"}},
+        }
+
+        with mock.patch.object(client, "request", return_value={"id": "123"}) as mock_request:
+            client.update_page_from_snapshot(
+                snapshot,
+                new_parent_id="900",
+            )
+
+        payload = mock_request.call_args.kwargs["body"]
+        self.assertEqual(payload["ancestors"], [{"id": "900"}])
+        self.assertEqual(payload["version"]["number"], 8)
+
     def test_summarize_page_extracts_core_fields(self) -> None:
         page = {
             "id": "123",

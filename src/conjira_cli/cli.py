@@ -294,6 +294,15 @@ def _build_parser() -> argparse.ArgumentParser:
     replace_section_body_group.add_argument("--section-markdown")
     replace_section_body_group.add_argument("--section-markdown-file")
 
+    move_page = subparsers.add_parser(
+        "move-page",
+        help="Move an existing Confluence page under a different parent page",
+    )
+    move_page.add_argument("--page-id", required=True)
+    move_page.add_argument("--new-parent-id", required=True)
+    move_page.add_argument("--allow-write", action="store_true")
+    move_page.add_argument("--dry-run", action="store_true")
+
     upload_attachment = subparsers.add_parser(
         "upload-attachment",
         help="Upload or update a Confluence attachment on a page",
@@ -513,6 +522,29 @@ def _confluence_replace_section_preview(
     }
 
 
+def _confluence_move_page_preview(
+    *,
+    page: Dict[str, Any],
+    new_parent_id: str,
+) -> Dict[str, Any]:
+    current_summary = ConfluenceClient.summarize_page(page)
+    ancestors = page.get("ancestors") or []
+    current_parent = ancestors[-1].get("id") if ancestors else None
+    return {
+        "dry_run": True,
+        "product": "confluence",
+        "action": "move-page",
+        "page_id": current_summary.get("id"),
+        "space_key": current_summary.get("space_key"),
+        "source_url": current_summary.get("webui_url"),
+        "title": current_summary.get("title"),
+        "current_version": current_summary.get("version"),
+        "current_parent_id": current_parent,
+        "new_parent_id": new_parent_id,
+        "parent_changed": current_parent != new_parent_id,
+    }
+
+
 def _confluence_attachment_preview(
     *,
     page_id: str,
@@ -674,6 +706,10 @@ def _guidance_for_config_error(message: str) -> list[str]:
         return [
             "Check that the heading text exists exactly once on the live Confluence page before retrying replace-section.",
             "For the first iteration, replace-section is safest on text-first pages with clear heading structure.",
+        ]
+    if "move-page requires different" in lowered:
+        return [
+            "Choose a different parent page before retrying move-page.",
         ]
     if "failed to parse confluence storage html fragment" in lowered:
         return [
@@ -968,6 +1004,37 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         payload["action"] = "replace-section"
         payload["heading"] = args.heading
         payload["matched_heading"] = replacement.matched_heading
+        return payload
+    if args.command == "move-page":
+        _require_write_intent(args.allow_write, args.dry_run)
+        _assert_confluence_update_allowed(
+            page_id=args.page_id,
+            allowed_page_ids=settings.allowed_page_ids,
+        )
+        if settings.allowed_parent_ids is not None and args.new_parent_id not in settings.allowed_parent_ids:
+            raise ConfigError(
+                "Write blocked: parent ID {0} is not in CONFLUENCE_ALLOWED_PARENT_IDS.".format(
+                    args.new_parent_id
+                )
+            )
+        page = client.get_page(args.page_id, expand="body.storage,version,space,ancestors")
+        ancestors = page.get("ancestors") or []
+        current_parent = ancestors[-1].get("id") if ancestors else None
+        if current_parent == args.new_parent_id:
+            raise ConfigError("move-page requires different current and new parent IDs.")
+        if args.dry_run:
+            return _confluence_move_page_preview(
+                page=page,
+                new_parent_id=args.new_parent_id,
+            )
+        updated = client.update_page_from_snapshot(
+            page,
+            new_parent_id=args.new_parent_id,
+        )
+        payload = client.summarize_page(updated)
+        payload["action"] = "move-page"
+        payload["previous_parent_id"] = current_parent
+        payload["new_parent_id"] = args.new_parent_id
         return payload
     if args.command == "upload-attachment":
         _require_write_intent(args.allow_write, args.dry_run)

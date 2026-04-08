@@ -373,6 +373,119 @@ class CliTests(unittest.TestCase):
         self.assertEqual(mock_update_page.call_args.args[0]["id"], "12345")
         self.assertIn("<p>Replacement</p>", mock_update_page.call_args.kwargs["new_body_html"])
 
+    def test_handle_confluence_move_page_dry_run_returns_preview(self) -> None:
+        args = SimpleNamespace(
+            command="move-page",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            page_id="12345",
+            new_parent_id="99999",
+            allow_write=False,
+            dry_run=True,
+        )
+        settings = ConfluenceSettings(
+            base_url="https://confluence.example.com",
+            token="token",
+            timeout_seconds=30,
+        )
+        page = {
+            "id": "12345",
+            "type": "page",
+            "title": "Guide",
+            "space": {"key": "DOCS"},
+            "version": {"number": 7},
+            "ancestors": [{"id": "10000"}],
+            "body": {"storage": {"value": "<p>Body</p>"}},
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=12345",
+            },
+        }
+
+        with mock.patch("conjira_cli.cli.build_confluence_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.ConfluenceClient.get_page",
+            return_value=page,
+        ) as mock_get_page, mock.patch(
+            "conjira_cli.cli.ConfluenceClient.update_page_from_snapshot"
+        ) as mock_update_page:
+            payload = _handle_confluence(args)
+
+        self.assertTrue(payload["dry_run"])
+        self.assertEqual(payload["action"], "move-page")
+        self.assertEqual(payload["page_id"], "12345")
+        self.assertEqual(payload["current_parent_id"], "10000")
+        self.assertEqual(payload["new_parent_id"], "99999")
+        mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space,ancestors")
+        mock_update_page.assert_not_called()
+
+    def test_handle_confluence_move_page_write_updates_parent(self) -> None:
+        args = SimpleNamespace(
+            command="move-page",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            page_id="12345",
+            new_parent_id="99999",
+            allow_write=True,
+            dry_run=False,
+        )
+        settings = ConfluenceSettings(
+            base_url="https://confluence.example.com",
+            token="token",
+            timeout_seconds=30,
+        )
+        page = {
+            "id": "12345",
+            "type": "page",
+            "title": "Guide",
+            "space": {"key": "DOCS"},
+            "version": {"number": 7},
+            "ancestors": [{"id": "10000"}],
+            "body": {"storage": {"value": "<p>Body</p>"}},
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=12345",
+            },
+        }
+        updated_summary = {
+            "id": "12345",
+            "type": "page",
+            "status": "current",
+            "title": "Guide",
+            "space": {"key": "DOCS"},
+            "version": {"number": 8},
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=12345",
+            },
+        }
+
+        with mock.patch("conjira_cli.cli.build_confluence_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.ConfluenceClient.get_page",
+            return_value=page,
+        ) as mock_get_page, mock.patch(
+            "conjira_cli.cli.ConfluenceClient.update_page_from_snapshot",
+            return_value=updated_summary,
+        ) as mock_update_page:
+            payload = _handle_confluence(args)
+
+        self.assertEqual(payload["action"], "move-page")
+        self.assertEqual(payload["previous_parent_id"], "10000")
+        self.assertEqual(payload["new_parent_id"], "99999")
+        mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space,ancestors")
+        mock_update_page.assert_called_once()
+        self.assertEqual(mock_update_page.call_args.args[0]["id"], "12345")
+        self.assertEqual(mock_update_page.call_args.kwargs["new_parent_id"], "99999")
+
     def test_build_error_payload_adds_replace_section_guidance(self) -> None:
         payload = _build_error_payload(
             ConfigError('replace-section target heading "Install" was not found.')
@@ -380,6 +493,14 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(payload["error_type"], "ConfigError")
         self.assertTrue(any("heading" in item.lower() for item in payload["guidance"]))
+
+    def test_build_error_payload_adds_move_page_guidance(self) -> None:
+        payload = _build_error_payload(
+            ConfigError("move-page requires different current and new parent IDs.")
+        )
+
+        self.assertEqual(payload["error_type"], "ConfigError")
+        self.assertTrue(any("different parent" in item.lower() for item in payload["guidance"]))
 
     def test_handle_jira_add_comment_dry_run_returns_preview(self) -> None:
         args = SimpleNamespace(
