@@ -10,7 +10,7 @@ _LIST_ITEM_RE = re.compile(r"^(\s*)([-+*]|\d+\.)\s+(.*)$")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 _HR_RE = re.compile(r"^ {0,3}([-*_])(?:\s*\1){2,}\s*$")
 _TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$")
-_CALLOUT_RE = re.compile(r"^\[!(INFO|NOTE|TIP|WARNING)\](?:\s+(.*))?$", re.IGNORECASE)
+_CALLOUT_RE = re.compile(r"^\[!(INFO|NOTE|TIP|WARNING|EXPAND)\](?:\s+(.*))?$", re.IGNORECASE)
 _INLINE_TOKEN_RE = re.compile(
     r"!\[\[(?P<obs_image>[^\]]+)\]\]"
     r"|\[\[(?P<obs_link>[^\]]+)\]\]"
@@ -214,7 +214,8 @@ def _parse_blockquote(lines: list[str], start: int) -> tuple[str, int]:
         first_line = quote_lines[0].strip()
         callout_match = _CALLOUT_RE.match(first_line)
         if callout_match is not None:
-            macro_name = callout_match.group(1).lower()
+            token = callout_match.group(1).upper()
+            macro_name = "expand" if token == "EXPAND" else token.lower()
             title = (callout_match.group(2) or "").strip()
             body_lines = quote_lines[1:]
             body_parts, _ = _parse_blocks(body_lines, 0)
