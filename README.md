@@ -18,7 +18,7 @@ If your team uses self-hosted Confluence and Jira, official cloud-native connect
 
 `conjira-cli` is built for that gap. It helps when you want to read Confluence pages, export them to Markdown, refresh stale exports from the live wiki, summarize inline comment threads, search Jira with JQL, or create and update content without hardcoding PATs into source files or chat transcripts.
 
-For report-style pages, it can also preserve a small set of Confluence-native presentation macros while still keeping Markdown as the source of truth. The current bridge covers Mermaid, Markdown callouts such as `> [!INFO]`, `> [!NOTE]`, `> [!TIP]`, and `> [!WARNING]`, plus expandable blocks with `> [!EXPAND]`.
+For report-style pages, it can also preserve a small set of Confluence-native presentation macros while still keeping Markdown as the source of truth. The current bridge covers Mermaid, Markdown callouts such as `> [!INFO]`, `> [!NOTE]`, `> [!TIP]`, and `> [!WARNING]`, expandable blocks with `> [!EXPAND]`, and inline status badges with `:status[In Progress]{color=yellow}`.
 
 ## What you can do with it
 
@@ -347,7 +347,7 @@ The recommended pattern is to set `CONFLUENCE_EXPORT_DEFAULT_DIR` to an inbox or
 
 ## Markdown import notes
 
-Markdown upload is a best-effort conversion to Confluence storage HTML. It works well for common headings, paragraphs, lists, blockquotes, fenced code blocks, tables, links, images, and simple wiki-style links. It is not a perfect round-trip for complex Confluence macros, merged tables, or deeply nested layouts, so treat Markdown import as a practical authoring path rather than a lossless document converter.
+Markdown upload is a best-effort conversion to Confluence storage HTML. It works well for common headings, paragraphs, lists, blockquotes, fenced code blocks, tables, links, images, simple wiki-style links, and the currently supported report macros (`mermaid`, callouts, `expand`, and `:status[Title]{color=blue}`). It is not a perfect round-trip for complex Confluence macros, merged tables, or deeply nested layouts, so treat Markdown import as a practical authoring path rather than a lossless document converter.
 
 Use `--body-file` and `--append-file` only for storage HTML files. If your source file is Markdown, use `--body-markdown-file` or `--append-markdown-file` so the CLI converts it before upload.
 

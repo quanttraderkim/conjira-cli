@@ -60,6 +60,15 @@ _STRUCTURED_TABLE_CONTENT_HEADERS = {
 }
 
 _CALLOUT_MACRO_NAMES = {"info", "note", "tip", "warning", "expand"}
+_STATUS_COLOUR_ALIASES = {
+    "blue": "blue",
+    "green": "green",
+    "grey": "grey",
+    "gray": "grey",
+    "purple": "purple",
+    "red": "red",
+    "yellow": "yellow",
+}
 
 
 def _local_name(tag: str) -> str:
@@ -88,7 +97,7 @@ def _join_inline_pieces(pieces: list[str]) -> str:
     if not filtered:
         return ""
     joined = " ".join(filtered)
-    joined = re.sub(r"\s+([,.;:!?])", r"\1", joined)
+    joined = re.sub(r"\s+([,.;!?]|:(?!status\[))", r"\1", joined)
     joined = re.sub(r"\(\s+", "(", joined)
     joined = re.sub(r"\s+\)", ")", joined)
     joined = joined.replace(" \n ", "\n")
@@ -171,6 +180,8 @@ class MarkdownExporter:
                 return ""
             if self.mermaid_macro_name and macro_name == self.mermaid_macro_name:
                 return self._render_mermaid_macro(elem)
+            if macro_name == "status":
+                return self._render_status_token(elem) + "\n\n"
             if macro_name in _CALLOUT_MACRO_NAMES:
                 return self._render_callout_macro(elem, macro_name)
             return self._render_children(elem, indent=indent)
@@ -248,6 +259,9 @@ class MarkdownExporter:
             filename = elem.attrib.get("{urn:ri}filename", "")
             return filename
         if name == "structured-macro":
+            macro_name = elem.attrib.get("{urn:ac}name")
+            if macro_name == "status":
+                return self._render_status_token(elem)
             return ""
         if name in {"ul", "ol", "table"}:
             return "\n" + self._render_block(elem, indent=1).strip() + "\n"
@@ -472,6 +486,12 @@ class MarkdownExporter:
         quoted_body = self._prefix_blockquote(rich_body)
         return f"{header}\n{quoted_body}\n\n"
 
+    def _render_status_token(self, elem: ET.Element) -> str:
+        title = self._extract_macro_parameter(elem, "title")
+        colour = self._extract_macro_parameter(elem, "colour") or self._extract_macro_parameter(elem, "color")
+        normalized_colour = self._normalize_status_colour(colour)
+        return f":status[{title}]{{color={normalized_colour}}}"
+
     @staticmethod
     def _extract_macro_plain_text_body(elem: ET.Element) -> str:
         for child in elem.iter():
@@ -494,6 +514,13 @@ class MarkdownExporter:
                 continue
             return _collapse_inline("".join(child.itertext()))
         return ""
+
+    @staticmethod
+    def _normalize_status_colour(value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            return "grey"
+        return _STATUS_COLOUR_ALIASES.get(stripped.lower(), stripped.lower())
 
     @staticmethod
     def _contains_emphasis_child(elem: ET.Element) -> bool:

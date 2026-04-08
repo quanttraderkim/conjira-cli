@@ -128,3 +128,28 @@ class MarkdownImportTests(unittest.TestCase):
         self.assertIn("<ac:rich-text-body>", result)
         self.assertIn("<p>Step 1</p>", result)
         self.assertIn("<p>Step 2</p>", result)
+
+    def test_markdown_to_storage_html_renders_status_macro_inline(self) -> None:
+        result = markdown_to_storage_html(
+            "Current state: :status[In Progress]{color=yellow}"
+        )
+
+        self.assertIn('<ac:structured-macro ac:name="status"', result)
+        self.assertIn('<ac:parameter ac:name="colour">Yellow</ac:parameter>', result)
+        self.assertIn('<ac:parameter ac:name="title">In Progress</ac:parameter>', result)
+
+    def test_markdown_to_storage_html_renders_status_macro_in_table_cell(self) -> None:
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| Item | Status |",
+                    "| --- | --- |",
+                    "| API | :status[Planned]{color=blue} |",
+                ]
+            )
+        )
+
+        self.assertIn("<table><tbody>", result)
+        self.assertIn('<ac:structured-macro ac:name="status"', result)
+        self.assertIn('<ac:parameter ac:name="colour">Blue</ac:parameter>', result)
+        self.assertIn('<ac:parameter ac:name="title">Planned</ac:parameter>', result)

@@ -18,7 +18,7 @@ English version: [README.md](README.md)
 
 `conjira-cli`는 그 틈을 메우기 위해 만들었습니다. Confluence 페이지 읽기, Markdown 내보내기, 오래된 export 갱신, 인라인 코멘트 스레드 요약, Jira JQL 검색, 문서와 이슈 생성 및 수정 같은 작업을 PAT를 소스 파일이나 채팅에 직접 남기지 않고 처리할 수 있습니다.
 
-또한 보고용 문서에서는 Markdown을 원본으로 유지하면서도 일부 Confluence 전용 표현을 살릴 수 있습니다. 현재는 Mermaid와 `> [!INFO]`, `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]` 같은 Markdown 콜아웃 문법, 그리고 `> [!EXPAND]` 형태의 펼치기 블록을 Confluence 매크로와 왕복할 수 있습니다.
+또한 보고용 문서에서는 Markdown을 원본으로 유지하면서도 일부 Confluence 전용 표현을 살릴 수 있습니다. 현재는 Mermaid와 `> [!INFO]`, `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]` 같은 Markdown 콜아웃 문법, `> [!EXPAND]` 형태의 펼치기 블록, 그리고 `:status[설계 단계]{color=blue}` 같은 인라인 상태 배지를 Confluence 매크로와 왕복할 수 있습니다.
 
 ## 할 수 있는 일
 
@@ -347,7 +347,7 @@ Jira 관련 설정:
 
 ## Markdown import 관련 주의사항
 
-Markdown 업로드는 Confluence storage HTML로의 best-effort 변환입니다. 일반적인 제목, 문단, 리스트, blockquote, fenced code block, 표, 링크, 이미지, 단순한 wiki 스타일 링크 정도에는 잘 맞지만, 복잡한 Confluence macro, 병합 셀, 아주 깊은 중첩 레이아웃까지 완벽하게 round-trip 하지는 않습니다.
+Markdown 업로드는 Confluence storage HTML로의 best-effort 변환입니다. 일반적인 제목, 문단, 리스트, blockquote, fenced code block, 표, 링크, 이미지, 단순한 wiki 스타일 링크는 물론 현재 지원하는 보고용 macro(`mermaid`, 콜아웃, `expand`, `:status[Title]{color=blue}`)까지는 잘 맞지만, 복잡한 Confluence macro, 병합 셀, 아주 깊은 중첩 레이아웃까지 완벽하게 round-trip 하지는 않습니다.
 
 `--body-file`과 `--append-file`은 storage HTML 파일용입니다. 입력 파일이 Markdown이면 `--body-markdown-file`이나 `--append-markdown-file`을 써야 CLI가 변환 후 업로드합니다.
 
