@@ -4,6 +4,8 @@
 
 English version: [README.md](README.md)
 
+배포 메모: [docs/RELEASING.md](docs/RELEASING.md)
+
 `conjira-cli`는 Confluence와 Jira를 사내 또는 자체 인프라에서 운영하는 팀이 스크립트, 로컬 코딩 에이전트, Markdown 워크플로에서 실용적으로 사용할 수 있도록 만든 작은 Python CLI입니다. 표준 Atlassian REST API를 단순한 명령줄 인터페이스로 감싸고, 로컬 자격 증명 관리를 더 안전하게 하며, 쓰기 작업에는 기본 안전장치를 둡니다.
 
 이 저장소는 꼭 Python 개발자만 쓰는 용도는 아닙니다. 로컬 코딩 에이전트나 셸을 실행할 수 있는 AI 도구를 쓰고 있다면, 이 레포와 `agent.env`를 에이전트에게 주고 “이 Confluence 페이지를 Markdown으로 export해줘”, “오래된 위키 복사본을 최신 상태로 갱신해줘”, “이번 주 생성된 Jira 이슈를 찾아줘”처럼 자연어로 요청해도 됩니다. 에이전트는 이 README와 `docs/AGENT_USAGE.md`를 보고 필요한 CLI 명령을 대신 실행할 수 있습니다.
