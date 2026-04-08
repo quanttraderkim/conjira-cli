@@ -199,7 +199,11 @@ Preview a Jira write before using `--allow-write`:
 
 ## Local setup
 
-If `local/agent.env` is missing, create it from `local/agent.env.example`.
+If `local/agent.env` is missing, either create it from `local/agent.env.example` or, on macOS, run:
+
+```bash
+conjira-setup-macos
+```
 
 On macOS, store the Confluence PAT like this:
 

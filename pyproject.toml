@@ -16,6 +16,7 @@ dependencies = []
 [project.scripts]
 conjira = "conjira_cli.cli:main"
 conjira-cli = "conjira_cli.cli:main"
+conjira-setup-macos = "conjira_cli.setup_macos:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
