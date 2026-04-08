@@ -141,6 +141,24 @@ class MarkdownExportTests(unittest.TestCase):
 
         self.assertEqual(result.strip(), "")
 
+    def test_callout_macro_renders_as_markdown_callout(self) -> None:
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+        html = (
+            '<ac:structured-macro ac:name="info" ac:schema-version="1">'
+            '<ac:parameter ac:name="title">Setup note</ac:parameter>'
+            "<ac:rich-text-body>"
+            "<p>Use a PAT stored in Keychain.</p>"
+            "<p>Run auth-check after setup.</p>"
+            "</ac:rich-text-body>"
+            "</ac:structured-macro>"
+        )
+
+        result = exporter.convert_fragment(html)
+
+        self.assertIn("> [!INFO] Setup note", result)
+        self.assertIn("> Use a PAT stored in Keychain.", result)
+        self.assertIn("> Run auth-check after setup.", result)
+
     def test_malformed_mixed_emphasis_is_flattened(self) -> None:
         exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
         html = "<ul><li><em>Description <strong>emphasis</strong></em></li></ul>"

@@ -18,6 +18,8 @@ If your team uses self-hosted Confluence and Jira, official cloud-native connect
 
 `conjira-cli` is built for that gap. It helps when you want to read Confluence pages, export them to Markdown, refresh stale exports from the live wiki, summarize inline comment threads, search Jira with JQL, or create and update content without hardcoding PATs into source files or chat transcripts.
 
+For report-style pages, it can also preserve a small set of Confluence-native presentation macros while still keeping Markdown as the source of truth. The current bridge covers Mermaid and Markdown callouts such as `> [!INFO]`, `> [!NOTE]`, `> [!TIP]`, and `> [!WARNING]`.
+
 ## What you can do with it
 
 - read Confluence pages and search with CQL
