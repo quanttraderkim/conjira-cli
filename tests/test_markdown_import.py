@@ -57,5 +57,6 @@ class MarkdownImportTests(unittest.TestCase):
         self.assertIn("<table><tbody>", result)
         self.assertIn("<th>Name</th>", result)
         self.assertIn("<td>Demo</td>", result)
-        self.assertIn("<pre><code>print", result)
-
+        self.assertIn('<ac:structured-macro ac:name="code"', result)
+        self.assertIn('<ac:parameter ac:name="language">python</ac:parameter>', result)
+        self.assertIn("<![CDATA[print('ok')]]>", result)

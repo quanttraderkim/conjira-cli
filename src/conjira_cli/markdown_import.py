@@ -95,14 +95,27 @@ def _parse_blocks(lines: list[str], start: int, *, stop_on_indent: Optional[int]
 def _parse_fenced_code(lines: list[str], start: int) -> tuple[str, int]:
     opening = lines[start].strip()
     fence = opening[:3]
+    language = opening[3:].strip() or "none"
     code_lines: list[str] = []
     i = start + 1
     while i < len(lines):
         if lines[i].strip().startswith(fence):
-            return "<pre><code>{0}</code></pre>".format(html.escape("\n".join(code_lines))), i + 1
+            return _render_code_macro("\n".join(code_lines), language), i + 1
         code_lines.append(lines[i])
         i += 1
-    return "<pre><code>{0}</code></pre>".format(html.escape("\n".join(code_lines))), i
+    return _render_code_macro("\n".join(code_lines), language), i
+
+
+def _render_code_macro(code: str, language: str) -> str:
+    safe_language = html.escape(language, quote=True)
+    cdata_code = code.replace("]]>", "]]]]><![CDATA[>")
+    return (
+        '<ac:structured-macro ac:name="code" ac:schema-version="1">'
+        '<ac:parameter ac:name="language">{0}</ac:parameter>'
+        '<ac:parameter ac:name="theme">Default</ac:parameter>'
+        "<ac:plain-text-body><![CDATA[{1}]]></ac:plain-text-body>"
+        "</ac:structured-macro>"
+    ).format(safe_language, cdata_code)
 
 
 def _parse_paragraph(
