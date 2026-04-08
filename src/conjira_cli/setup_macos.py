@@ -83,6 +83,31 @@ def prompt_secret(label: str) -> str:
     return getpass.getpass(f"{label}: ").strip()
 
 
+def read_env_value(path: Path, key: str) -> Optional[str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+
+    prefix = key + "="
+    for line in text.splitlines():
+        if line.startswith(prefix):
+            value = line[len(prefix) :].strip()
+            return value or None
+    return None
+
+
+def resolve_keychain_target(path: Path, prefix: str, default_account: str) -> tuple[str, str]:
+    service = read_env_value(path, f"{prefix}_PAT_KEYCHAIN_SERVICE") or "conjira-cli"
+    account = read_env_value(path, f"{prefix}_PAT_KEYCHAIN_ACCOUNT") or default_account
+    return service, account
+
+
+def prompt_required_secret(label: str) -> str:
+    print(f"{label} input is hidden. Paste the token and press Enter.")
+    return prompt_secret(label)
+
+
 def keychain_store(service: str, account: str, secret: str) -> None:
     subprocess.run(
         [
@@ -158,9 +183,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if configure_confluence:
         configured_any = True
         base_url = prompt_default("Confluence base URL", "https://confluence.example.com")
-        service = prompt_default("Confluence Keychain service", "conjira-cli")
-        account = prompt_default("Confluence Keychain account", "confluence-prod")
-        pat = prompt_secret("Enter Confluence PAT")
+        service, account = resolve_keychain_target(env_file, "CONFLUENCE", "confluence-prod")
+        print(f"Confluence Keychain target: service={service}, account={account}")
+        pat = prompt_required_secret("Enter Confluence PAT")
         if not pat:
             print("Confluence PAT is required when Confluence setup is enabled.", file=sys.stderr)
             return 1
@@ -184,9 +209,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if configure_jira:
         configured_any = True
         base_url = prompt_default("Jira base URL", "https://jira.example.com")
-        service = prompt_default("Jira Keychain service", "conjira-cli")
-        account = prompt_default("Jira Keychain account", "jira-prod")
-        pat = prompt_secret("Enter Jira PAT")
+        service, account = resolve_keychain_target(env_file, "JIRA", "jira-prod")
+        print(f"Jira Keychain target: service={service}, account={account}")
+        pat = prompt_required_secret("Enter Jira PAT")
         if not pat:
             print("Jira PAT is required when Jira setup is enabled.", file=sys.stderr)
             return 1

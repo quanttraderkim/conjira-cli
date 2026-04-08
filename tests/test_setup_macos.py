@@ -6,7 +6,9 @@ from unittest import mock
 
 from conjira_cli.setup_macos import (
     ensure_env_file,
+    read_env_value,
     remove_env_value,
+    resolve_keychain_target,
     resolve_default_paths,
     upsert_env_value,
 )
@@ -74,3 +76,38 @@ class SetupMacOSTests(unittest.TestCase):
 
         self.assertEqual(env_file, Path(tmp_dir) / "local" / "agent.env")
         self.assertEqual(staging_dir, Path(tmp_dir) / "local" / "exports")
+
+    def test_read_env_value_returns_existing_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            env_file = Path(tmp_dir) / "agent.env"
+            env_file.write_text(
+                "CONFLUENCE_PAT_KEYCHAIN_SERVICE=custom-service\n",
+                encoding="utf-8",
+            )
+
+            value = read_env_value(env_file, "CONFLUENCE_PAT_KEYCHAIN_SERVICE")
+
+        self.assertEqual(value, "custom-service")
+
+    def test_resolve_keychain_target_uses_existing_env_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            env_file = Path(tmp_dir) / "agent.env"
+            env_file.write_text(
+                "CONFLUENCE_PAT_KEYCHAIN_SERVICE=custom-service\n"
+                "CONFLUENCE_PAT_KEYCHAIN_ACCOUNT=custom-account\n",
+                encoding="utf-8",
+            )
+
+            service, account = resolve_keychain_target(env_file, "CONFLUENCE", "confluence-prod")
+
+        self.assertEqual(service, "custom-service")
+        self.assertEqual(account, "custom-account")
+
+    def test_resolve_keychain_target_falls_back_to_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            env_file = Path(tmp_dir) / "agent.env"
+
+            service, account = resolve_keychain_target(env_file, "JIRA", "jira-prod")
+
+        self.assertEqual(service, "conjira-cli")
+        self.assertEqual(account, "jira-prod")

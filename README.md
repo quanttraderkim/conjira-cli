@@ -80,6 +80,8 @@ conjira-setup-macos
 ```
 
 The script stores PATs in macOS Keychain, writes only non-secret settings to `local/agent.env`, and can run `auth-check` for you at the end.
+It uses the default Keychain target names automatically, so most users only need to enter the base URL and PAT.
+PAT prompts are hidden on screen by design. Paste the token and press Enter even if nothing appears while typing.
 It does not write PAT values to `~/.zshrc` or other shell profile files.
 If you are running directly from a source checkout before installing entrypoints, you can still use:
 
