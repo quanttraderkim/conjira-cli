@@ -241,6 +241,13 @@ Markdown으로 Confluence 페이지 생성 및 수정:
 ./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
 ```
 
+기존 Confluence 페이지를 다른 부모 페이지 아래로 이동:
+
+```bash
+./bin/conjira --env-file ./local/agent.env move-page --dry-run --page-id 100002 --new-parent-id 100001
+./bin/conjira --env-file ./local/agent.env move-page --allow-write --page-id 100002 --new-parent-id 100001
+```
+
 Confluence나 Jira 쓰기 작업을 먼저 preview:
 
 ```bash

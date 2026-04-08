@@ -241,6 +241,13 @@ Replace one named section on an existing Confluence page:
 ./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
 ```
 
+Move an existing Confluence page under a different parent page:
+
+```bash
+./bin/conjira --env-file ./local/agent.env move-page --dry-run --page-id 100002 --new-parent-id 100001
+./bin/conjira --env-file ./local/agent.env move-page --allow-write --page-id 100002 --new-parent-id 100001
+```
+
 Preview a Confluence or Jira write first:
 
 ```bash

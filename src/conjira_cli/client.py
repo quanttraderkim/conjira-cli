@@ -154,6 +154,7 @@ class ConfluenceClient(BaseAtlassianClient):
         new_title: Optional[str] = None,
         new_body_html: Optional[str] = None,
         append_html: Optional[str] = None,
+        new_parent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         current = self.get_page(page_id, expand="body.storage,version,space")
         return self.update_page_from_snapshot(
@@ -161,6 +162,7 @@ class ConfluenceClient(BaseAtlassianClient):
             new_title=new_title,
             new_body_html=new_body_html,
             append_html=append_html,
+            new_parent_id=new_parent_id,
         )
 
     def update_page_from_snapshot(
@@ -170,6 +172,7 @@ class ConfluenceClient(BaseAtlassianClient):
         new_title: Optional[str] = None,
         new_body_html: Optional[str] = None,
         append_html: Optional[str] = None,
+        new_parent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         current_body = (((current.get("body") or {}).get("storage") or {}).get("value")) or ""
         updated_body = new_body_html if new_body_html is not None else current_body
@@ -191,6 +194,8 @@ class ConfluenceClient(BaseAtlassianClient):
                 "number": ((current.get("version") or {}).get("number") or 0) + 1,
             },
         }
+        if new_parent_id is not None:
+            payload["ancestors"] = [{"id": new_parent_id}]
         return self.request("PUT", "/rest/api/content/{0}".format(current["id"]), body=payload)
 
     def search(
