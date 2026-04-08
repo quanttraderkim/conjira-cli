@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 from conjira_cli.setup_macos import (
+    completion_hint,
     ensure_env_file,
     read_env_value,
     remove_env_value,
@@ -111,3 +112,17 @@ class SetupMacOSTests(unittest.TestCase):
 
         self.assertEqual(service, "conjira-cli")
         self.assertEqual(account, "jira-prod")
+
+    def test_completion_hint_uses_auto_load_message_for_local_agent_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            env_file = root / "local" / "agent.env"
+            with mock.patch("pathlib.Path.cwd", return_value=root):
+                hint = completion_hint(env_file)
+
+        self.assertIn("auto-load ./local/agent.env", hint)
+        self.assertIn("conjira auth-check", hint)
+
+    def test_completion_hint_uses_explicit_env_file_for_non_default_path(self) -> None:
+        hint = completion_hint(Path("/tmp/custom.env"))
+        self.assertEqual(hint, "Try: conjira --env-file /tmp/custom.env auth-check")

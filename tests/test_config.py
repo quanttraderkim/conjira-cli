@@ -1,9 +1,15 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from conjira_cli.config import build_jira_settings, build_settings, load_env_file
+from conjira_cli.config import (
+    build_jira_settings,
+    build_settings,
+    load_env_file,
+    resolve_env_file_path,
+)
 
 
 class ConfigTests(unittest.TestCase):
@@ -105,3 +111,52 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(settings.timeout_seconds, 55)
         self.assertEqual(settings.allowed_project_keys, {"TEST", "OPS"})
         self.assertEqual(settings.allowed_issue_keys, {"TEST-1", "OPS-2"})
+
+    def test_resolve_env_file_path_prefers_explicit_value(self) -> None:
+        resolved = resolve_env_file_path("~/demo.env")
+        self.assertTrue(resolved.endswith("demo.env"))
+
+    def test_resolve_env_file_path_uses_local_agent_env_from_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            env_path = root / "local" / "agent.env"
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            env_path.write_text("CONFLUENCE_BASE_URL=https://example.com\n", encoding="utf-8")
+
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(root)
+                resolved = resolve_env_file_path(None)
+            finally:
+                os.chdir(previous_cwd)
+
+        self.assertEqual(Path(resolved).resolve(), env_path.resolve())
+
+    def test_build_settings_uses_local_agent_env_when_env_file_omitted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            env_path = root / "local" / "agent.env"
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            env_path.write_text(
+                "CONFLUENCE_BASE_URL=https://example.com\n"
+                "CONFLUENCE_PAT=token\n",
+                encoding="utf-8",
+            )
+
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(root)
+                settings = build_settings(
+                    base_url=None,
+                    token=None,
+                    token_file=None,
+                    token_keychain_service=None,
+                    token_keychain_account=None,
+                    timeout_seconds=None,
+                    env_file=None,
+                )
+            finally:
+                os.chdir(previous_cwd)
+
+        self.assertEqual(settings.base_url, "https://example.com")
+        self.assertEqual(settings.token, "token")

@@ -56,6 +56,16 @@ def load_env_file(path: Path) -> Dict[str, str]:
     return values
 
 
+def resolve_env_file_path(env_file: Optional[str]) -> Optional[str]:
+    if env_file:
+        return str(Path(env_file).expanduser())
+
+    default_local_env = Path.cwd() / "local" / "agent.env"
+    if default_local_env.exists():
+        return str(default_local_env)
+    return None
+
+
 def _parse_csv_set(value: Optional[str]) -> Optional[Set[str]]:
     if not value:
         return None
@@ -103,8 +113,9 @@ def _resolve_common_settings(
     env_file: Optional[str] = None,
 ) -> Tuple[Dict[str, str], str, str, int]:
     env: Dict[str, str] = {}
-    if env_file:
-        env = load_env_file(Path(env_file))
+    resolved_env_file = resolve_env_file_path(env_file)
+    if resolved_env_file:
+        env = load_env_file(Path(resolved_env_file))
 
     base_url_key = "{0}_BASE_URL".format(prefix)
     token_key = "{0}_PAT".format(prefix)

@@ -158,6 +158,17 @@ def resolve_default_paths(explicit_env_file: Optional[str]) -> tuple[Path, Path]
     return cwd_root / "local" / "agent.env", cwd_root / "local" / "exports"
 
 
+def completion_hint(env_file: Path) -> str:
+    default_env_file = Path.cwd() / "local" / "agent.env"
+    if env_file == default_env_file:
+        return (
+            "Run conjira from this folder to auto-load ./local/agent.env.\n"
+            "Try: conjira auth-check\n"
+            "     conjira jira-auth-check"
+        )
+    return f"Try: conjira --env-file {env_file} auth-check"
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     if sys.platform != "darwin":
         print("This setup command currently supports macOS only.", file=sys.stderr)
@@ -237,7 +248,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     print()
     print("Setup complete.")
-    print(f"Try: conjira --env-file {env_file} --help")
+    print(completion_hint(env_file))
     return 0
 
 

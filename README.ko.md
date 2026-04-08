@@ -85,6 +85,7 @@ conjira-setup-macos
 대부분의 사용자는 Keychain 이름을 따로 정할 필요 없이 base URL과 PAT만 입력하면 됩니다.
 PAT 입력은 화면에 보이지 않는 숨김 입력이므로, 아무것도 안 보여도 그대로 붙여넣고 Enter를 누르시면 됩니다.
 `~/.zshrc` 같은 셸 프로필 파일에 PAT 값을 쓰지는 않습니다.
+같은 폴더에서 계속 작업하면 `conjira`가 `./local/agent.env`를 자동으로 읽으므로, 이후에는 `--env-file`을 매번 붙이지 않아도 됩니다.
 아직 엔트리포인트를 설치하지 않은 source checkout 상태라면 아래 wrapper도 사용할 수 있습니다.
 
 ```bash
@@ -103,10 +104,12 @@ Codex, Claude Code 같은 로컬 셸 실행형 에이전트를 쓰고 있다면,
 직접 CLI를 실행하고 싶다면 아래 정도만 먼저 보면 됩니다.
 
 ```bash
-conjira --env-file ./local/agent.env auth-check
-conjira --env-file ./local/agent.env jira-auth-check
-conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
+conjira auth-check
+conjira jira-auth-check
+conjira export-page-md --page-id 123456 --output-dir "/path/to/notes"
 ```
+
+다른 폴더에서 실행하는 경우에는 `--env-file /path/to/local/agent.env`를 명시해주시면 됩니다.
 
 예시 출력은 아래처럼 짧고 단순한 JSON 형태입니다. 아래 값은 모두 synthetic example입니다.
 
@@ -210,9 +213,11 @@ JIRA_PAT_FILE=/path/to/jira.token
 설정 후에는 아래처럼 연결을 확인하면 됩니다.
 
 ```bash
-conjira --env-file ./local/agent.env auth-check
-conjira --env-file ./local/agent.env jira-auth-check
+conjira auth-check
+conjira jira-auth-check
 ```
+
+다른 작업 폴더에서 실행하는 경우에는 `--env-file /path/to/local/agent.env`를 같이 주시면 됩니다.
 
 ## 자주 쓰는 명령
 
