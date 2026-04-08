@@ -85,6 +85,7 @@ The script stores PATs in macOS Keychain, writes only non-secret settings to `lo
 It uses the default Keychain target names automatically, so most users only need to enter the base URL and PAT.
 PAT prompts are hidden on screen by design. Paste the token and press Enter even if nothing appears while typing.
 It does not write PAT values to `~/.zshrc` or other shell profile files.
+If you keep working in the same folder, `conjira` will auto-load `./local/agent.env` so you do not need to pass `--env-file` each time.
 If you are running directly from a source checkout before installing entrypoints, you can still use:
 
 ```bash
@@ -103,10 +104,12 @@ If you are using Codex, Claude Code, or another shell-capable local coding agent
 If you want to run the CLI directly, start with these short commands:
 
 ```bash
-conjira --env-file ./local/agent.env auth-check
-conjira --env-file ./local/agent.env jira-auth-check
-conjira --env-file ./local/agent.env export-page-md --page-id 123456 --output-dir "/path/to/notes"
+conjira auth-check
+conjira jira-auth-check
+conjira export-page-md --page-id 123456 --output-dir "/path/to/notes"
 ```
+
+If you run the CLI from a different folder, pass the config file explicitly with `--env-file /path/to/local/agent.env`.
 
 Short sample output blocks, using synthetic values:
 
@@ -210,9 +213,11 @@ JIRA_PAT_FILE=/path/to/jira.token
 Then verify the connection:
 
 ```bash
-conjira --env-file ./local/agent.env auth-check
-conjira --env-file ./local/agent.env jira-auth-check
+conjira auth-check
+conjira jira-auth-check
 ```
+
+If you run the CLI outside the configured folder, use `--env-file /path/to/local/agent.env` explicitly.
 
 ## Common commands
 

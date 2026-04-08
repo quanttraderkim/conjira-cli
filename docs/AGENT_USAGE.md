@@ -206,6 +206,7 @@ conjira-setup-macos
 ```
 
 For most users, `conjira-setup-macos` only needs the product base URL and PAT. The default Keychain service/account names are filled in automatically. PAT prompts are hidden on screen, so paste the token and press Enter even if the input looks blank.
+If the agent runs `conjira` from the same workspace folder, `./local/agent.env` will be loaded automatically. If it runs from somewhere else, pass `--env-file /path/to/local/agent.env` explicitly.
 
 On macOS, store the Confluence PAT like this:
 
@@ -235,6 +236,6 @@ JIRA_PAT=your-jira-pat
 Then verify:
 
 ```bash
-./bin/conjira --env-file ./local/agent.env auth-check
-./bin/conjira --env-file ./local/agent.env jira-auth-check
+./bin/conjira auth-check
+./bin/conjira jira-auth-check
 ```
