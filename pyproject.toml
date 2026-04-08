@@ -8,8 +8,35 @@ version = "0.2.0"
 description = "Unofficial agent-friendly CLI for self-hosted Confluence and Jira"
 readme = "README.md"
 requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "quanttraderkim" }
+]
+keywords = [
+  "confluence",
+  "jira",
+  "atlassian",
+  "markdown",
+  "cli",
+  "mcp",
+  "agent",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Utilities",
 ]
 dependencies = []
 
@@ -17,6 +44,11 @@ dependencies = []
 conjira = "conjira_cli.cli:main"
 conjira-cli = "conjira_cli.cli:main"
 conjira-setup-macos = "conjira_cli.setup_macos:main"
+
+[project.urls]
+Homepage = "https://github.com/quanttraderkim/conjira-cli"
+Repository = "https://github.com/quanttraderkim/conjira-cli"
+Issues = "https://github.com/quanttraderkim/conjira-cli/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
