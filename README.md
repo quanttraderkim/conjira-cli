@@ -145,12 +145,14 @@ Use bullet points only for true parallel items. Do not split a single thought in
 
 A good default order is `purpose -> summary -> key judgments / evidence -> risks / assumptions -> implications / next actions`. Strategy memos usually need `why this matters`, `key judgment`, `evidence`, and `implications`. PRDs usually need `problem`, `goal`, `scope`, `flow`, `policy`, and `open issues`. Skill specs are better when they stay literal and dry, with sections like `one-line definition`, `when to use`, `inputs`, `outputs`, `exceptions`, and `evaluation criteria`.
 
+For longer strategy or report documents, explicit numbering helps. Top-level sections such as `A.`, `B.`, `C.` and second-level sections such as `A-1.`, `A-2.` usually make the table of contents and the body much easier to scan. As a default, stay within two levels unless the user explicitly wants a deeper document tree.
+
 Cut abstract filler. Avoid phrases like “strategically meaningful”, “fundamentally important value”, or “meaningful impact across multiple dimensions” unless they add something precise. Prefer concrete statements such as “follow-up gaps turn into revenue loss”, “A is the right first rollout option”, or “free-user monetization is necessary but total revenue impact is limited”.
 
 If you want an agent to follow this style explicitly, a good request is:
 
 ```text
-Use conjira to publish this document to Confluence. Keep the source content intact, but rewrite it in a concise internal memo style. Reduce formal `~입니다/~합니다` phrasing, prefer short noun-phrase or judgment-oriented wording, put the key summary first, use stronger h3/h4 headings and tables where they help scanability, keep bullets for true parallel items only, and remove abstract filler.
+Use conjira to publish this document to Confluence. Keep the source content intact, but rewrite it in a concise internal memo style. Reduce formal `~입니다/~합니다` phrasing, prefer short noun-phrase or judgment-oriented wording, put the key summary first, use stronger h3/h4 headings and tables where they help scanability, add `A.` / `A-1.` numbering when the document is long enough to benefit from it, keep bullets for true parallel items only, and remove abstract filler.
 ```
 
 Short sample output blocks, using synthetic values:
