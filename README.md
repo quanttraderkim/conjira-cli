@@ -310,6 +310,14 @@ conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY 
 conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
 ```
 
+Inspect updated timestamps or recent comments when needed:
+
+```bash
+conjira jira-get-issue --issue-key DEMO-123 --include-comments --comments-limit 2
+conjira jira-get-issue --issue-key DEMO-123 --raw --fields summary,updated,comment
+conjira jira-search --jql 'project = DEMO ORDER BY updated DESC' --raw --fields summary,updated
+```
+
 Create a Jira issue or add a comment:
 
 ```bash

@@ -26,6 +26,16 @@ from conjira_cli.markdown_import import markdown_to_storage_html
 from conjira_cli.section_edit import SectionEditError, replace_section_html
 from conjira_cli.tree_export import export_page_tree, sanitize_path_component
 
+_JIRA_SUMMARY_FIELDS = [
+    "summary",
+    "status",
+    "issuetype",
+    "project",
+    "assignee",
+    "reporter",
+    "updated",
+]
+
 
 def _read_text_arg(raw_text: Optional[str], file_path: Optional[str]) -> str:
     if raw_text is not None:
@@ -41,6 +51,21 @@ def _read_json_arg(raw_json: Optional[str], file_path: Optional[str]) -> Dict[st
     if file_path:
         return json.loads(Path(file_path).read_text(encoding="utf-8"))
     return {}
+
+
+def _merge_csv_fields(raw_fields: Optional[str], required_fields: list[str]) -> Optional[str]:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for value in [raw_fields, ",".join(required_fields)]:
+        if not value:
+            continue
+        for token in value.split(","):
+            item = token.strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            tokens.append(item)
+    return ",".join(tokens) if tokens else None
 
 
 def _read_confluence_body_arg(
@@ -353,6 +378,9 @@ def _build_parser() -> argparse.ArgumentParser:
     jira_get_issue.add_argument("--issue-key", required=True)
     jira_get_issue.add_argument("--fields")
     jira_get_issue.add_argument("--expand")
+    jira_get_issue.add_argument("--include-comments", action="store_true")
+    jira_get_issue.add_argument("--comments-limit", type=int, default=3)
+    jira_get_issue.add_argument("--raw", action="store_true")
 
     jira_search = subparsers.add_parser("jira-search", help="Search Jira with JQL")
     jira_search.add_argument("--jql", required=True)
@@ -360,6 +388,7 @@ def _build_parser() -> argparse.ArgumentParser:
     jira_search.add_argument("--start", type=int, default=0)
     jira_search.add_argument("--fields")
     jira_search.add_argument("--expand")
+    jira_search.add_argument("--raw", action="store_true")
 
     jira_get_createmeta = subparsers.add_parser(
         "jira-get-createmeta",
@@ -1193,8 +1222,20 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
     if args.command == "jira-auth-check":
         return client.auth_check()
     if args.command == "jira-get-issue":
-        issue = client.get_issue(args.issue_key, fields=args.fields, expand=args.expand)
-        return client.summarize_issue(issue)
+        fields = args.fields
+        if args.include_comments:
+            required_fields = ["comment", "updated"]
+            if args.fields is None:
+                required_fields = _JIRA_SUMMARY_FIELDS + ["comment"]
+            fields = _merge_csv_fields(args.fields, required_fields)
+        issue = client.get_issue(args.issue_key, fields=fields, expand=args.expand)
+        if args.raw:
+            return issue
+        return client.summarize_issue(
+            issue,
+            include_comments=args.include_comments,
+            comments_limit=args.comments_limit,
+        )
     if args.command == "jira-search":
         result = client.search(
             jql=args.jql,
@@ -1203,6 +1244,8 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
             fields=args.fields,
             expand=args.expand,
         )
+        if args.raw:
+            return result
         return client.summarize_search_results(result.get("issues", []))
     if args.command == "jira-get-createmeta":
         result = client.get_createmeta(
