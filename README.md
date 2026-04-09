@@ -135,6 +135,24 @@ Use conjira to publish this Markdown file as a report-style Confluence page. Kee
 
 If you want to stay closer to raw Markdown, say `keep this Markdown-first and avoid extra presentation macros`. If you want a more polished Confluence page, say `optimize this for Confluence readability while keeping the source content intact`.
 
+## Document writing style guide
+
+For Confluence uploads, structure matters as much as accuracy. Strategy memos, PRDs, planning docs, and report-style pages read much better when the writer uses a compact working-document style instead of long essay-like prose.
+
+Prefer short memo-style wording over verbose formal phrasing. In Korean this usually means concise endings such as `~함`, `~필요`, `~전제`, `~검토`, or `~제안` rather than repetitive `~입니다` and `~합니다`. Keep paragraphs short, lead with the conclusion, and make `###` headings carry the message or judgment instead of acting as generic labels.
+
+Use bullet points only for true parallel items. Do not split a single thought into fake bullets just to reduce line length. Use tables for comparisons, summaries, options, risks, target groups, ownership, or decision support. Do not force short explanatory text into a table when a compact paragraph is clearer.
+
+A good default order is `purpose -> summary -> key judgments / evidence -> risks / assumptions -> implications / next actions`. Strategy memos usually need `why this matters`, `key judgment`, `evidence`, and `implications`. PRDs usually need `problem`, `goal`, `scope`, `flow`, `policy`, and `open issues`. Skill specs are better when they stay literal and dry, with sections like `one-line definition`, `when to use`, `inputs`, `outputs`, `exceptions`, and `evaluation criteria`.
+
+Cut abstract filler. Avoid phrases like “strategically meaningful”, “fundamentally important value”, or “meaningful impact across multiple dimensions” unless they add something precise. Prefer concrete statements such as “follow-up gaps turn into revenue loss”, “A is the right first rollout option”, or “free-user monetization is necessary but total revenue impact is limited”.
+
+If you want an agent to follow this style explicitly, a good request is:
+
+```text
+Use conjira to publish this document to Confluence. Keep the source content intact, but rewrite it in a concise working-document style. Put the key summary first, use stronger h3/h4 headings and tables where they help scanability, keep bullets for true parallel items only, and remove abstract filler.
+```
+
 Short sample output blocks, using synthetic values:
 
 ```json
