@@ -111,6 +111,30 @@ conjira export-page-md --page-id 123456 --output-dir "/path/to/notes"
 
 다른 폴더에서 실행하는 경우에는 `--env-file /path/to/local/agent.env`를 명시해주시면 됩니다.
 
+## 문서 타입별 요청 템플릿
+
+에이전트에게 문서를 올리거나 수정해 달라고 할 때는, 문서 종류와 Confluence에서 어느 정도까지 보기 좋게 다듬을지를 같이 말해주면 결과가 훨씬 안정적입니다.
+
+스킬 spec이나 evaluation 문서는 이렇게 요청하시면 됩니다.
+
+```text
+conjira를 사용해서 이 Markdown 파일을 Confluence 페이지로 올려줘. 문서 타입은 skill spec이고, Markdown 구조를 원본으로 유지해줘. 제목, 헤딩, 표는 그대로 살리고, 가독성을 해치지 않는 범위에서만 Confluence 렌더링을 써줘.
+```
+
+서비스기획 문서나 PRD는 이렇게 요청하시면 됩니다.
+
+```text
+conjira를 사용해서 이 Markdown 파일을 Confluence PRD 문서로 올려줘. 원본 내용은 유지하되 Confluence에서 읽기 좋게 정리해줘. status, callout, expand를 적절히 사용하고, 요약, 배경, 문제 정의, 범위, 플로우, 리스크, 오픈 이슈 구조로 정리해줘.
+```
+
+전략보고서나 공유용 보고 문서는 이렇게 요청하시면 됩니다.
+
+```text
+conjira를 사용해서 이 Markdown 파일을 보고용 Confluence 문서로 올려줘. 원본 내용은 유지하되, Confluence에서 보기 좋게 executive summary를 앞에 두고 핵심 결정사항과 리스크를 먼저 보이게 정리해줘. status, info 블록, expand, Mermaid를 필요할 때 사용해줘.
+```
+
+반대로 최대한 Markdown 원본 그대로 올리고 싶다면 `Markdown-first로 유지하고 추가 매크로는 최소화해줘`라고 같이 적어주시면 됩니다. Confluence에서 더 보기 좋게 다듬고 싶다면 `원본 내용은 유지하되 Confluence 가독성 중심으로 정리해줘`라고 적어주시면 됩니다.
+
 예시 출력은 아래처럼 짧고 단순한 JSON 형태입니다. 아래 값은 모두 synthetic example입니다.
 
 ```json
