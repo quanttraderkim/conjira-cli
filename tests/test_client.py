@@ -109,6 +109,7 @@ class ClientTests(unittest.TestCase):
                 "project": {"key": "TEST"},
                 "assignee": {"displayName": "Assignee User"},
                 "reporter": {"displayName": "Reporter User"},
+                "updated": "2026-04-09T18:20:00.000+0900",
             },
         }
 
@@ -117,7 +118,48 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(summary["key"], "TEST-9")
         self.assertEqual(summary["status"], "In Progress")
         self.assertEqual(summary["issue_type"], "Task")
+        self.assertEqual(summary["updated"], "2026-04-09T18:20:00.000+0900")
         self.assertEqual(summary["browse_url"], "https://jira.example.com/browse/TEST-9")
+
+    def test_summarize_issue_can_include_recent_comments(self) -> None:
+        client = JiraClient(base_url="https://jira.example.com", token="token")
+        issue = {
+            "id": "456",
+            "key": "TEST-9",
+            "fields": {
+                "summary": "Demo issue",
+                "status": {"name": "In Progress"},
+                "issuetype": {"name": "Task"},
+                "project": {"key": "TEST"},
+                "updated": "2026-04-09T18:20:00.000+0900",
+                "comment": {
+                    "total": 2,
+                    "comments": [
+                        {
+                            "id": "1001",
+                            "author": {"displayName": "Alex"},
+                            "created": "2026-04-08T10:00:00.000+0900",
+                            "updated": "2026-04-08T10:00:00.000+0900",
+                            "body": "First comment",
+                        },
+                        {
+                            "id": "1002",
+                            "author": {"displayName": "Taylor"},
+                            "created": "2026-04-09T09:00:00.000+0900",
+                            "updated": "2026-04-09T09:10:00.000+0900",
+                            "body": "Second comment with a longer body that should still remain readable.",
+                        },
+                    ],
+                },
+            },
+        }
+
+        summary = client.summarize_issue(issue, include_comments=True, comments_limit=1)
+
+        self.assertEqual(summary["comment_count"], 2)
+        self.assertEqual(len(summary["recent_comments"]), 1)
+        self.assertEqual(summary["recent_comments"][0]["id"], "1002")
+        self.assertEqual(summary["recent_comments"][0]["author"], "Taylor")
 
     def test_list_inline_comments_fetches_all_pages(self) -> None:
         client = ConfluenceClient(base_url="https://confluence.example.com", token="token")

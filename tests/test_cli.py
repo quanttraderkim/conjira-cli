@@ -611,6 +611,153 @@ class CliTests(unittest.TestCase):
         mock_get_issue.assert_called_once_with("DEMO-123")
         mock_add_comment.assert_not_called()
 
+    def test_handle_jira_get_issue_can_include_comments(self) -> None:
+        args = SimpleNamespace(
+            command="jira-get-issue",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            issue_key="DEMO-123",
+            fields=None,
+            expand=None,
+            include_comments=True,
+            comments_limit=2,
+            raw=False,
+        )
+        settings = JiraSettings(
+            base_url="https://jira.example.com",
+            token="token",
+            timeout_seconds=30,
+        )
+        issue = {
+            "id": "9000",
+            "key": "DEMO-123",
+            "fields": {
+                "summary": "Demo issue",
+                "status": {"name": "In Progress"},
+                "issuetype": {"name": "Task"},
+                "project": {"key": "DEMO"},
+                "updated": "2026-04-09T18:20:00.000+0900",
+                "comment": {
+                    "total": 1,
+                    "comments": [
+                        {
+                            "id": "1001",
+                            "author": {"displayName": "Alex"},
+                            "created": "2026-04-09T09:00:00.000+0900",
+                            "updated": "2026-04-09T09:10:00.000+0900",
+                            "body": "Latest comment body",
+                        }
+                    ],
+                },
+            },
+        }
+
+        with mock.patch("conjira_cli.cli.build_jira_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.JiraClient.get_issue",
+            return_value=issue,
+        ) as mock_get_issue:
+            payload = _handle_jira(args)
+
+        self.assertEqual(payload["key"], "DEMO-123")
+        self.assertEqual(payload["updated"], "2026-04-09T18:20:00.000+0900")
+        self.assertEqual(payload["comment_count"], 1)
+        self.assertEqual(payload["recent_comments"][0]["body_preview"], "Latest comment body")
+        mock_get_issue.assert_called_once_with(
+            "DEMO-123",
+            fields="summary,status,issuetype,project,assignee,reporter,updated,comment",
+            expand=None,
+        )
+
+    def test_handle_jira_get_issue_raw_returns_full_payload(self) -> None:
+        args = SimpleNamespace(
+            command="jira-get-issue",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            issue_key="DEMO-123",
+            fields="summary,updated",
+            expand="changelog",
+            include_comments=False,
+            comments_limit=3,
+            raw=True,
+        )
+        settings = JiraSettings(
+            base_url="https://jira.example.com",
+            token="token",
+            timeout_seconds=30,
+        )
+        issue = {
+            "id": "9000",
+            "key": "DEMO-123",
+            "fields": {"summary": "Demo issue", "updated": "2026-04-09T18:20:00.000+0900"},
+        }
+
+        with mock.patch("conjira_cli.cli.build_jira_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.JiraClient.get_issue",
+            return_value=issue,
+        ) as mock_get_issue:
+            payload = _handle_jira(args)
+
+        self.assertEqual(payload, issue)
+        mock_get_issue.assert_called_once_with("DEMO-123", fields="summary,updated", expand="changelog")
+
+    def test_handle_jira_search_raw_returns_full_payload(self) -> None:
+        args = SimpleNamespace(
+            command="jira-search",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            jql="project = DEMO",
+            limit=5,
+            start=0,
+            fields="summary,updated",
+            expand=None,
+            raw=True,
+        )
+        settings = JiraSettings(
+            base_url="https://jira.example.com",
+            token="token",
+            timeout_seconds=30,
+        )
+        result = {
+            "issues": [
+                {
+                    "id": "9000",
+                    "key": "DEMO-123",
+                    "fields": {"summary": "Demo issue"},
+                }
+            ],
+            "total": 1,
+        }
+
+        with mock.patch("conjira_cli.cli.build_jira_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.JiraClient.search",
+            return_value=result,
+        ) as mock_search:
+            payload = _handle_jira(args)
+
+        self.assertEqual(payload, result)
+        mock_search.assert_called_once_with(
+            jql="project = DEMO",
+            limit=5,
+            start=0,
+            fields="summary,updated",
+            expand=None,
+        )
+
     def test_handle_confluence_upload_attachment_dry_run_detects_replace_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             file_path = Path(tmp_dir) / "chart.png"

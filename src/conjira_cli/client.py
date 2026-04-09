@@ -540,14 +540,32 @@ class JiraClient(BaseAtlassianClient):
             return None
         return "{0}/browse/{1}".format(base_url.rstrip("/"), issue_key)
 
-    def summarize_issue(self, issue: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _comment_body_preview(value: Any, limit: int = 280) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            collapsed = " ".join(value.split())
+        else:
+            collapsed = " ".join(json.dumps(value, ensure_ascii=False).split())
+        if len(collapsed) <= limit:
+            return collapsed
+        return collapsed[: limit - 1].rstrip() + "…"
+
+    def summarize_issue(
+        self,
+        issue: Dict[str, Any],
+        *,
+        include_comments: bool = False,
+        comments_limit: int = 3,
+    ) -> Dict[str, Any]:
         fields = issue.get("fields") or {}
         status = fields.get("status") or {}
         issue_type = fields.get("issuetype") or {}
         project = fields.get("project") or {}
         assignee = fields.get("assignee") or {}
         reporter = fields.get("reporter") or {}
-        return {
+        summary = {
             "id": issue.get("id"),
             "key": issue.get("key"),
             "summary": fields.get("summary"),
@@ -556,8 +574,25 @@ class JiraClient(BaseAtlassianClient):
             "project_key": project.get("key"),
             "assignee": assignee.get("displayName"),
             "reporter": reporter.get("displayName"),
+            "updated": fields.get("updated"),
             "browse_url": self.browse_url(self.base_url, issue.get("key")),
         }
+        if include_comments:
+            comment_block = fields.get("comment") or {}
+            comments = comment_block.get("comments") or []
+            limited = comments[-comments_limit:] if comments_limit > 0 else comments
+            summary["comment_count"] = comment_block.get("total", len(comments))
+            summary["recent_comments"] = [
+                {
+                    "id": comment.get("id"),
+                    "author": ((comment.get("author") or {}).get("displayName")),
+                    "created": comment.get("created"),
+                    "updated": comment.get("updated"),
+                    "body_preview": self._comment_body_preview(comment.get("body")),
+                }
+                for comment in limited
+            ]
+        return summary
 
     def summarize_search_results(self, items: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
         results = [self.summarize_issue(item) for item in items]

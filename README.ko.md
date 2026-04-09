@@ -310,6 +310,14 @@ conjira --env-file ./local/agent.env jira-search --jql 'project = DEMO ORDER BY 
 conjira --env-file ./local/agent.env jira-get-issue --issue-key DEMO-123
 ```
 
+필요할 때는 updated 시각이나 최근 댓글까지 같이 볼 수 있습니다.
+
+```bash
+conjira jira-get-issue --issue-key DEMO-123 --include-comments --comments-limit 2
+conjira jira-get-issue --issue-key DEMO-123 --raw --fields summary,updated,comment
+conjira jira-search --jql 'project = DEMO ORDER BY updated DESC' --raw --fields summary,updated
+```
+
 Jira 이슈 생성과 댓글 추가:
 
 ```bash
