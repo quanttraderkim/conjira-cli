@@ -111,6 +111,30 @@ conjira export-page-md --page-id 123456 --output-dir "/path/to/notes"
 
 If you run the CLI from a different folder, pass the config file explicitly with `--env-file /path/to/local/agent.env`.
 
+## Prompt templates by document type
+
+When you ask an agent to upload or update a document, results are better if you tell it what kind of document it is, whether Markdown should remain the source of truth, and whether the Confluence page should stay plain or become more presentation-friendly.
+
+For skill specs or evaluation docs, a good request is:
+
+```text
+Use conjira to upload this Markdown file as a Confluence page. Treat it as a skill spec, keep the Markdown structure as the source of truth, preserve headings and tables, and only use Confluence-native rendering where it helps readability without changing the document's meaning.
+```
+
+For service planning docs or PRDs, a good request is:
+
+```text
+Use conjira to turn this Markdown file into a Confluence PRD. Keep the content faithful to the source, but make it easier to read in Confluence. Add status, callouts, and expand blocks where they improve readability, and organize the page around summary, background, problem, scope, flow, risks, and open questions.
+```
+
+For strategy reports or review decks, a good request is:
+
+```text
+Use conjira to publish this Markdown file as a report-style Confluence page. Keep the source content intact, but optimize the page for presentation. Put the executive summary first, surface key decisions and risks early, and use status, info blocks, expand sections, and Mermaid where appropriate.
+```
+
+If you want to stay closer to raw Markdown, say `keep this Markdown-first and avoid extra presentation macros`. If you want a more polished Confluence page, say `optimize this for Confluence readability while keeping the source content intact`.
+
 Short sample output blocks, using synthetic values:
 
 ```json
