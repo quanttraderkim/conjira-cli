@@ -38,6 +38,38 @@ class MarkdownExportTests(unittest.TestCase):
 
         self.assertIn("confluence_parent_page_id: 100", result)
 
+    def test_convert_page_renders_hub_children_as_index_content(self) -> None:
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+
+        result = exporter.convert_page(
+            {
+                "title": "상세기획 루트",
+                "version": 7,
+                "webui_url": "https://confluence.example.com/pages/123",
+                "body_html": "",
+                "page_kind": "hub",
+                "child_count": 2,
+                "children": [
+                    {
+                        "id": "20001",
+                        "title": "메시지 AI 제안",
+                        "webui_url": "https://confluence.example.com/pages/20001",
+                    },
+                    {
+                        "id": "20002",
+                        "title": "메시지 요약",
+                        "webui_url": "https://confluence.example.com/pages/20002",
+                    },
+                ],
+            }
+        )
+
+        self.assertIn("confluence_page_kind: hub", result)
+        self.assertIn("confluence_child_count: 2", result)
+        self.assertIn("## Child pages", result)
+        self.assertIn("| 메시지 AI 제안 | 20001 | [Open](https://confluence.example.com/pages/20001) |", result)
+        self.assertIn("| 메시지 요약 | 20002 | [Open](https://confluence.example.com/pages/20002) |", result)
+
     def test_structured_table_renders_as_sections(self) -> None:
         exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
         html = (

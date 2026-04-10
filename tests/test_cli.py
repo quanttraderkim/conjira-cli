@@ -240,6 +240,142 @@ class CliTests(unittest.TestCase):
         mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space,ancestors")
         mock_export_tree.assert_called_once()
 
+    def test_handle_confluence_get_page_marks_hub_and_lists_children(self) -> None:
+        args = SimpleNamespace(
+            command="get-page",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            page_id="12345",
+            expand="body.storage",
+        )
+        settings = ConfluenceSettings(
+            base_url="https://confluence.example.com",
+            token="token",
+            timeout_seconds=30,
+        )
+        page = {
+            "id": "12345",
+            "type": "page",
+            "status": "current",
+            "title": "AI 메시지 상세기획",
+            "space": {"key": "DOCS"},
+            "version": {"number": 7},
+            "body": {"storage": {"value": "<p><br/></p>"}},
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=12345",
+            },
+        }
+        child_pages = [
+            {
+                "id": "20001",
+                "type": "page",
+                "status": "current",
+                "title": "메시지 AI 제안",
+            }
+        ]
+
+        with mock.patch("conjira_cli.cli.build_confluence_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.ConfluenceClient.get_page",
+            return_value=page,
+        ) as mock_get_page, mock.patch(
+            "conjira_cli.cli.ConfluenceClient.list_child_pages",
+            return_value=child_pages,
+        ) as mock_list_child_pages:
+            payload = _handle_confluence(args)
+
+        self.assertEqual(payload["page_kind"], "hub")
+        self.assertTrue(payload["body_is_effectively_empty"])
+        self.assertEqual(payload["child_count"], 1)
+        self.assertEqual(payload["children"][0]["id"], "20001")
+        self.assertEqual(
+            payload["children"][0]["webui_url"],
+            "https://confluence.example.com/pages/viewpage.action?pageId=20001",
+        )
+        self.assertIn("hub/index page", payload["read_hint"])
+        self.assertEqual(payload["body_html"], "<p><br/></p>")
+        mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space")
+        mock_list_child_pages.assert_called_once_with("12345")
+
+    def test_handle_confluence_export_page_md_generates_hub_markdown(self) -> None:
+        args = SimpleNamespace(
+            command="export-page-md",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            page_id="12345",
+            output_file=None,
+            output_dir=None,
+            filename=None,
+            staging_local=True,
+        )
+        settings = ConfluenceSettings(
+            base_url="https://confluence.example.com",
+            token="token",
+            timeout_seconds=30,
+            export_staging_dir="/tmp/conjira-staging",
+        )
+        page = {
+            "id": "12345",
+            "type": "page",
+            "status": "current",
+            "title": "AI 메시지 상세기획",
+            "space": {"key": "DOCS"},
+            "version": {"number": 7},
+            "body": {"storage": {"value": ""}},
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=12345",
+            },
+        }
+        child_pages = [
+            {
+                "id": "20001",
+                "type": "page",
+                "status": "current",
+                "title": "메시지 AI 제안",
+                "space": {"key": "DOCS"},
+                "version": {"number": 3},
+                "_links": {
+                    "base": "https://confluence.example.com",
+                    "webui": "/pages/viewpage.action?pageId=20001",
+                },
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            settings.export_staging_dir = tmp_dir
+            with mock.patch("conjira_cli.cli.build_confluence_settings", return_value=settings), mock.patch(
+                "conjira_cli.cli.ConfluenceClient.get_page",
+                return_value=page,
+            ) as mock_get_page, mock.patch(
+                "conjira_cli.cli.ConfluenceClient.list_child_pages",
+                return_value=child_pages,
+            ) as mock_list_child_pages:
+                payload = _handle_confluence(args)
+
+            output_file = Path(payload["output_file"])
+            markdown = output_file.read_text(encoding="utf-8")
+
+        self.assertEqual(payload["page_kind"], "hub")
+        self.assertEqual(payload["child_count"], 1)
+        self.assertTrue(payload["hub_generated"])
+        self.assertIn("confluence_page_kind: hub", markdown)
+        self.assertIn("confluence_child_count: 1", markdown)
+        self.assertIn("> [!INFO] This is a Confluence hub/index page.", markdown)
+        self.assertIn("| 메시지 AI 제안 | 20001 |", markdown)
+        mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space")
+        mock_list_child_pages.assert_called_once_with("12345")
+
     def test_handle_confluence_update_page_dry_run_uses_live_page_without_write(self) -> None:
         args = SimpleNamespace(
             command="update-page",

@@ -113,6 +113,10 @@ def _normalize_table_header(value: str) -> str:
     return value
 
 
+def _escape_table_cell(value: str) -> str:
+    return value.replace("|", "\\|").strip()
+
+
 @dataclass
 class MarkdownExporter:
     base_url: str
@@ -124,8 +128,14 @@ class MarkdownExporter:
         source_url = page.get("webui_url") or ""
         version = page.get("version")
         parent_page_id = page.get("parent_page_id")
+        page_kind = page.get("page_kind")
+        child_count = page.get("child_count")
         body_html = page.get("body_html") or ""
-        body_md = self.convert_fragment(body_html)
+        children = page.get("children") or []
+        if page_kind == "hub" and children:
+            body_md = self._render_hub_page(children)
+        else:
+            body_md = self.convert_fragment(body_html)
 
         parts = [
             "---",
@@ -135,6 +145,10 @@ class MarkdownExporter:
         ]
         if parent_page_id:
             parts.append(f"confluence_parent_page_id: {parent_page_id}")
+        if page_kind:
+            parts.append(f"confluence_page_kind: {page_kind}")
+        if child_count:
+            parts.append(f"confluence_child_count: {child_count}")
         parts.extend(
             [
             f"source_url: {source_url}",
@@ -150,6 +164,25 @@ class MarkdownExporter:
             ]
         )
         return "\n".join(parts)
+
+    def _render_hub_page(self, children: list[dict[str, Any]]) -> str:
+        lines = [
+            "> [!INFO] This is a Confluence hub/index page.",
+            "> The main content lives in the child pages listed below.",
+            "",
+            "## Child pages",
+            "",
+            "| Title | Page ID | Link |",
+            "| --- | --- | --- |",
+        ]
+        for child in children:
+            title = _escape_table_cell(child.get("title") or "Untitled")
+            page_id = _escape_table_cell(str(child.get("id") or ""))
+            url = child.get("webui_url") or ""
+            link = f"[Open]({url})" if url else ""
+            lines.append(f"| {title} | {page_id} | {link} |")
+        lines.append("")
+        return "\n".join(lines)
 
     def convert_fragment(self, body_html: str) -> str:
         wrapped = (

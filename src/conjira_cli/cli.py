@@ -129,6 +129,62 @@ def _preview_html(value: Optional[str], limit: int = 240) -> Optional[str]:
     return _preview_text(preview, limit=limit)
 
 
+def _page_body_html(page: Dict[str, Any]) -> str:
+    return (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
+
+
+def _is_effectively_empty_body(body_html: Optional[str]) -> bool:
+    if not body_html:
+        return True
+    normalized = body_html.replace("\xa0", " ").replace("&nbsp;", " ")
+    normalized = re.sub(r"<!--.*?-->", "", normalized, flags=re.DOTALL)
+    normalized = re.sub(r"<p>\s*(<br\s*/?>)?\s*</p>", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"<br\s*/?>", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s+", "", normalized)
+    return normalized == ""
+
+
+def _summarize_child_pages(child_pages: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    return [ConfluenceClient.summarize_page(page) for page in child_pages]
+
+
+def _fallback_confluence_page_url(page: Dict[str, Any], page_id: Optional[str]) -> Optional[str]:
+    if not page_id:
+        return None
+    base_url = ((page.get("_links") or {}).get("base")) or ""
+    if not base_url:
+        return None
+    return "{0}/pages/viewpage.action?pageId={1}".format(base_url.rstrip("/"), page_id)
+
+
+def _page_navigation_payload(
+    *,
+    page: Dict[str, Any],
+    child_pages: list[Dict[str, Any]],
+) -> Dict[str, Any]:
+    body_html = _page_body_html(page)
+    body_is_effectively_empty = _is_effectively_empty_body(body_html)
+    child_summaries = _summarize_child_pages(child_pages)
+    for summary in child_summaries:
+        if not summary.get("webui_url"):
+            summary["webui_url"] = _fallback_confluence_page_url(page, summary.get("id"))
+    page_kind = "hub" if body_is_effectively_empty and child_summaries else "content"
+
+    payload: Dict[str, Any] = {
+        "page_kind": page_kind,
+        "body_is_effectively_empty": body_is_effectively_empty,
+        "child_count": len(child_summaries),
+    }
+    if child_summaries:
+        payload["children"] = child_summaries
+    if page_kind == "hub":
+        payload["read_hint"] = (
+            "This page behaves like a hub/index page. Read the listed child pages or use "
+            "`export-tree-md` for the full hierarchy."
+        )
+    return payload
+
+
 def _sanitize_markdown_filename(title: str) -> str:
     sanitized = "".join(
         "_" if char in '<>:"/\\|?*' else char
@@ -181,7 +237,7 @@ def _read_export_metadata(path: Path) -> Dict[str, Any]:
 
 def _page_export_payload(page: Dict[str, Any]) -> Dict[str, Any]:
     payload = ConfluenceClient.summarize_page(page)
-    payload["body_html"] = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
+    payload["body_html"] = _page_body_html(page)
     payload["ancestors"] = page.get("ancestors") or []
     return payload
 
@@ -822,14 +878,19 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
     if args.command == "auth-check":
         return client.auth_check()
     if args.command == "get-page":
-        page = client.get_page(args.page_id, expand=args.expand)
+        expand = _merge_csv_fields(args.expand, ["body.storage", "version", "space"])
+        page = client.get_page(args.page_id, expand=expand)
+        child_pages = client.list_child_pages(args.page_id)
         payload = client.summarize_page(page)
+        payload.update(_page_navigation_payload(page=page, child_pages=child_pages))
         if args.expand and "body.storage" in args.expand:
-            payload["body_html"] = (((page.get("body") or {}).get("storage") or {}).get("value"))
+            payload["body_html"] = _page_body_html(page)
         return payload
     if args.command == "export-page-md":
         page = client.get_page(args.page_id, expand="body.storage,version,space")
+        child_pages = client.list_child_pages(args.page_id)
         payload = _page_export_payload(page)
+        payload.update(_page_navigation_payload(page=page, child_pages=child_pages))
         exporter = MarkdownExporter(
             base_url=settings.base_url,
             page_id=args.page_id,
@@ -852,6 +913,9 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             "title": payload["title"],
             "output_file": str(output_path),
             "source_url": payload["webui_url"],
+            "page_kind": payload["page_kind"],
+            "child_count": payload["child_count"],
+            "hub_generated": payload["page_kind"] == "hub",
             "used_staging_local": str(output_path).startswith(
                 str((Path(settings.export_staging_dir) if settings.export_staging_dir else _default_export_staging_dir()))
             ),
