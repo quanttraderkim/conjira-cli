@@ -27,6 +27,15 @@ class SectionReplacementResult:
     updated_body_html: str
 
 
+@dataclass
+class HeadingInsertionResult:
+    heading: str
+    matched_heading: str
+    heading_level: int
+    inserted_html: str
+    updated_body_html: str
+
+
 def replace_section_html(
     body_html: str,
     *,
@@ -35,29 +44,11 @@ def replace_section_html(
 ) -> SectionReplacementResult:
     root = _parse_fragment(body_html)
     children = list(root)
-    normalized_target = _normalize_heading(heading)
-
-    matches: list[tuple[int, ET.Element, int]] = []
-    for index, child in enumerate(children):
-        heading_level = _heading_level(child)
-        if heading_level is None:
-            continue
-        rendered_heading = _element_text(child)
-        if _normalize_heading(rendered_heading) == normalized_target:
-            matches.append((index, child, heading_level))
-
-    if not matches:
-        raise SectionEditError(
-            'replace-section target heading "{0}" was not found.'.format(heading)
-        )
-    if len(matches) > 1:
-        raise SectionEditError(
-            'replace-section target heading "{0}" is ambiguous because it appears multiple times.'.format(
-                heading
-            )
-        )
-
-    match_index, match_elem, match_level = matches[0]
+    match_index, match_elem, match_level = _find_unique_heading(
+        children,
+        heading=heading,
+        action_name="replace-section",
+    )
     end_index = len(children)
     for index in range(match_index + 1, len(children)):
         next_level = _heading_level(children[index])
@@ -87,6 +78,36 @@ def replace_section_html(
     )
 
 
+def insert_after_heading_html(
+    body_html: str,
+    *,
+    heading: str,
+    inserted_html: str,
+) -> HeadingInsertionResult:
+    root = _parse_fragment(body_html)
+    children = list(root)
+    match_index, match_elem, match_level = _find_unique_heading(
+        children,
+        heading=heading,
+        action_name="insert-after-heading",
+    )
+
+    new_root = _parse_fragment(inserted_html)
+    new_children = [copy.deepcopy(child) for child in list(new_root)]
+
+    insert_at = match_index + 1
+    for offset, child in enumerate(new_children):
+        root.insert(insert_at + offset, child)
+
+    return HeadingInsertionResult(
+        heading=heading,
+        matched_heading=_element_text(match_elem),
+        heading_level=match_level,
+        inserted_html=_serialize_elements(new_children),
+        updated_body_html=_serialize_root(root),
+    )
+
+
 def _parse_fragment(fragment_html: str) -> ET.Element:
     wrapped = _WRAPPED_ROOT_PREFIX + fragment_html + "</root>"
     try:
@@ -101,6 +122,36 @@ def _serialize_root(root: ET.Element) -> str:
 
 def _serialize_elements(elements: list[ET.Element]) -> str:
     return "".join(ET.tostring(element, encoding="unicode") for element in elements).strip()
+
+
+def _find_unique_heading(
+    children: list[ET.Element],
+    *,
+    heading: str,
+    action_name: str,
+) -> tuple[int, ET.Element, int]:
+    normalized_target = _normalize_heading(heading)
+    matches: list[tuple[int, ET.Element, int]] = []
+    for index, child in enumerate(children):
+        heading_level = _heading_level(child)
+        if heading_level is None:
+            continue
+        rendered_heading = _element_text(child)
+        if _normalize_heading(rendered_heading) == normalized_target:
+            matches.append((index, child, heading_level))
+
+    if not matches:
+        raise SectionEditError(
+            '{0} target heading "{1}" was not found.'.format(action_name, heading)
+        )
+    if len(matches) > 1:
+        raise SectionEditError(
+            '{0} target heading "{1}" is ambiguous because it appears multiple times.'.format(
+                action_name,
+                heading,
+            )
+        )
+    return matches[0]
 
 
 def _local_name(tag: str) -> str:
