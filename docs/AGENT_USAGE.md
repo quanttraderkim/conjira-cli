@@ -119,6 +119,12 @@ Replace a named section under an existing Confluence heading:
 ./bin/conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "Rollout plan" --section-markdown-file "/path/to/rollout.md"
 ```
 
+Insert content immediately after an existing Confluence heading:
+
+```bash
+./bin/conjira --env-file ./local/agent.env insert-after-heading --dry-run --page-id 100002 --heading "Rollout plan" --insert-markdown-file "/path/to/rollout-intro.md"
+```
+
 Preview the same section replacement before writing:
 
 ```bash
@@ -196,6 +202,7 @@ Preview a Jira write before using `--allow-write`:
 - Markdown upload is a best-effort conversion to Confluence storage HTML. Prefer it for common text-first pages, not for macro-heavy round-trips.
 - `--body-file` and `--append-file` are for storage HTML files. Use `--body-markdown-file` or `--append-markdown-file` for Markdown inputs.
 - `replace-section` currently works best on text-first pages with clear heading structure. It intentionally fails when the target heading is missing or ambiguous.
+- `insert-after-heading` uses the same heading matching rule as `replace-section`, so it should target a heading that exists exactly once on the page.
 
 ## Local setup
 

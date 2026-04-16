@@ -1,6 +1,10 @@
 import unittest
 
-from conjira_cli.section_edit import SectionEditError, replace_section_html
+from conjira_cli.section_edit import (
+    SectionEditError,
+    insert_after_heading_html,
+    replace_section_html,
+)
 
 
 class SectionEditTests(unittest.TestCase):
@@ -45,4 +49,45 @@ class SectionEditTests(unittest.TestCase):
                 "<h2>Install</h2><p>A</p><h2>Install</h2><p>B</p>",
                 heading="Install",
                 replacement_html="<p>Replacement</p>",
+            )
+
+    def test_insert_after_heading_html_inserts_immediately_after_heading(self) -> None:
+        body_html = (
+            "<h1>Guide</h1>"
+            "<p>Intro</p>"
+            "<h2>Install</h2>"
+            "<p>Old install step</p>"
+            "<h2>Usage</h2>"
+            "<p>Run command</p>"
+        )
+
+        result = insert_after_heading_html(
+            body_html,
+            heading="Install",
+            inserted_html="<p>New note</p><ul><li>Check this first</li></ul>",
+        )
+
+        self.assertEqual(result.matched_heading, "Install")
+        self.assertEqual(result.heading_level, 2)
+        self.assertIn("<p>New note</p>", result.inserted_html)
+        self.assertIn("<ul><li>Check this first</li></ul>", result.updated_body_html)
+        self.assertIn(
+            "<h2>Install</h2><p>New note</p><ul><li>Check this first</li></ul><p>Old install step</p>",
+            result.updated_body_html,
+        )
+
+    def test_insert_after_heading_html_fails_when_heading_missing(self) -> None:
+        with self.assertRaises(SectionEditError):
+            insert_after_heading_html(
+                "<h1>Guide</h1><p>Body</p>",
+                heading="Install",
+                inserted_html="<p>Inserted</p>",
+            )
+
+    def test_insert_after_heading_html_fails_when_heading_ambiguous(self) -> None:
+        with self.assertRaises(SectionEditError):
+            insert_after_heading_html(
+                "<h2>Install</h2><p>A</p><h2>Install</h2><p>B</p>",
+                heading="Install",
+                inserted_html="<p>Inserted</p>",
             )

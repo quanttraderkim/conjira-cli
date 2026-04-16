@@ -309,6 +309,12 @@ conjira --env-file ./local/agent.env update-page --allow-write --page-id 100002 
 conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "배포 계획" --section-markdown-file ./notes/rollout.md
 ```
 
+특정 heading 바로 아래에 새 콘텐츠 삽입:
+
+```bash
+conjira --env-file ./local/agent.env insert-after-heading --dry-run --page-id 100002 --heading "배포 계획" --insert-markdown-file ./notes/rollout-intro.md
+```
+
 기존 Confluence 페이지를 다른 부모 페이지 아래로 이동:
 
 ```bash

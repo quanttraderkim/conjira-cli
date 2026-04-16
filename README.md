@@ -309,6 +309,12 @@ Replace one named section on an existing Confluence page:
 conjira --env-file ./local/agent.env replace-section --allow-write --page-id 100002 --heading "Rollout plan" --section-markdown-file ./notes/rollout.md
 ```
 
+Insert new content immediately after a named heading:
+
+```bash
+conjira --env-file ./local/agent.env insert-after-heading --dry-run --page-id 100002 --heading "Rollout plan" --insert-markdown-file ./notes/rollout-intro.md
+```
+
 Move an existing Confluence page under a different parent page:
 
 ```bash

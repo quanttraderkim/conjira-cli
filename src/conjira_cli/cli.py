@@ -23,7 +23,11 @@ from conjira_cli.config import (
 from conjira_cli.inline_comments import render_inline_comment_summary_markdown
 from conjira_cli.markdown_export import MarkdownExporter
 from conjira_cli.markdown_import import markdown_to_storage_html
-from conjira_cli.section_edit import SectionEditError, replace_section_html
+from conjira_cli.section_edit import (
+    SectionEditError,
+    insert_after_heading_html,
+    replace_section_html,
+)
 from conjira_cli.tree_export import export_page_tree, sanitize_path_component
 
 _JIRA_SUMMARY_FIELDS = [
@@ -402,6 +406,22 @@ def _build_parser() -> argparse.ArgumentParser:
     replace_section_body_group.add_argument("--section-markdown")
     replace_section_body_group.add_argument("--section-markdown-file")
 
+    insert_after_heading = subparsers.add_parser(
+        "insert-after-heading",
+        help="Insert content immediately after a specific Confluence heading",
+    )
+    insert_after_heading.add_argument("--page-id", required=True)
+    insert_after_heading.add_argument("--heading", required=True)
+    insert_after_heading.add_argument("--allow-write", action="store_true")
+    insert_after_heading.add_argument("--dry-run", action="store_true")
+    insert_after_heading_body_group = insert_after_heading.add_mutually_exclusive_group(
+        required=True
+    )
+    insert_after_heading_body_group.add_argument("--insert-html")
+    insert_after_heading_body_group.add_argument("--insert-file")
+    insert_after_heading_body_group.add_argument("--insert-markdown")
+    insert_after_heading_body_group.add_argument("--insert-markdown-file")
+
     move_page = subparsers.add_parser(
         "move-page",
         help="Move an existing Confluence page under a different parent page",
@@ -634,6 +654,31 @@ def _confluence_replace_section_preview(
     }
 
 
+def _confluence_insert_after_heading_preview(
+    *,
+    page: Dict[str, Any],
+    heading: str,
+    result: Any,
+    body_source: str,
+) -> Dict[str, Any]:
+    current_summary = ConfluenceClient.summarize_page(page)
+    return {
+        "dry_run": True,
+        "product": "confluence",
+        "action": "insert-after-heading",
+        "page_id": current_summary.get("id"),
+        "space_key": current_summary.get("space_key"),
+        "source_url": current_summary.get("webui_url"),
+        "heading": heading,
+        "matched_heading": result.matched_heading,
+        "heading_level": result.heading_level,
+        "body_source": body_source,
+        "inserted_after_heading": True,
+        "inserted_block_preview": _preview_html(result.inserted_html),
+        "resulting_body_preview": _preview_html(result.updated_body_html),
+    }
+
+
 def _confluence_move_page_preview(
     *,
     page: Dict[str, Any],
@@ -818,6 +863,11 @@ def _guidance_for_config_error(message: str) -> list[str]:
         return [
             "Check that the heading text exists exactly once on the live Confluence page before retrying replace-section.",
             "For the first iteration, replace-section is safest on text-first pages with clear heading structure.",
+        ]
+    if "insert-after-heading target heading" in lowered:
+        return [
+            "Check that the heading text exists exactly once on the live Confluence page before retrying insert-after-heading.",
+            "insert-after-heading is safest on text-first pages with clear heading structure and a stable target heading.",
         ]
     if "move-page requires different" in lowered:
         return [
@@ -1189,6 +1239,51 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         payload["action"] = "replace-section"
         payload["heading"] = args.heading
         payload["matched_heading"] = replacement.matched_heading
+        return payload
+    if args.command == "insert-after-heading":
+        _require_write_intent(args.allow_write, args.dry_run)
+        _assert_confluence_update_allowed(
+            page_id=args.page_id,
+            allowed_page_ids=settings.allowed_page_ids,
+        )
+        inserted_html = _read_confluence_body_arg(
+            args.insert_html,
+            args.insert_file,
+            args.insert_markdown,
+            args.insert_markdown_file,
+            mermaid_macro_name=settings.mermaid_macro_name,
+        )
+        page = client.get_page(args.page_id, expand="body.storage,version,space")
+        current_body = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
+        try:
+            insertion = insert_after_heading_html(
+                current_body,
+                heading=args.heading,
+                inserted_html=inserted_html,
+            )
+        except SectionEditError as exc:
+            raise ConfigError(str(exc)) from exc
+        body_source = _confluence_body_source(
+            raw_html=args.insert_html,
+            html_file=args.insert_file,
+            raw_markdown=args.insert_markdown,
+            markdown_file=args.insert_markdown_file,
+        )
+        if args.dry_run:
+            return _confluence_insert_after_heading_preview(
+                page=page,
+                heading=args.heading,
+                result=insertion,
+                body_source=body_source or "unknown",
+            )
+        updated = client.update_page_from_snapshot(
+            page,
+            new_body_html=insertion.updated_body_html,
+        )
+        payload = client.summarize_page(updated)
+        payload["action"] = "insert-after-heading"
+        payload["heading"] = args.heading
+        payload["matched_heading"] = insertion.matched_heading
         return payload
     if args.command == "move-page":
         _require_write_intent(args.allow_write, args.dry_run)
