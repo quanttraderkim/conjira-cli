@@ -249,3 +249,49 @@ class MarkdownExportTests(unittest.TestCase):
         result = exporter.convert_fragment(html)
 
         self.assertIn("- Description emphasis", result)
+
+    def test_nested_table_pipes_escaped_in_cell(self) -> None:
+        """A nested table inside a cell must not break the outer table columns."""
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+        # Outer 2-column table with headers that do NOT trigger structured
+        # detection so we get a regular pipe table.
+        html = (
+            "<table><tbody>"
+            "<tr><th>Host</th><th>Config</th></tr>"
+            "<tr>"
+            "<td>SSL cert</td>"
+            "<td><table><tbody>"
+            "<tr><td>Type</td><td>Wildcard</td></tr>"
+            "<tr><td>Issuer</td><td>DigiCert</td></tr>"
+            "</tbody></table></td>"
+            "</tr>"
+            "</tbody></table>"
+        )
+        result = exporter.convert_fragment(html)
+
+        # The outer table row for "SSL cert" should have nested table pipes
+        # escaped so it stays as a 2-column row.
+        for line in result.splitlines():
+            if "SSL cert" in line and line.strip().startswith("|"):
+                self.assertIn("\\|", line, "Nested table pipes should be escaped")
+                break
+        else:
+            self.fail("Could not find 'SSL cert' row in rendered table")
+
+    def test_nested_list_pipes_escaped_in_cell(self) -> None:
+        """A nested list with pipe chars inside a cell must escape them."""
+        exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
+        html = (
+            "<table><tbody>"
+            "<tr><th>Task</th><th>Notes</th></tr>"
+            "<tr>"
+            "<td>Review</td>"
+            "<td><ul><li>Option A | Option B</li></ul></td>"
+            "</tr>"
+            "</tbody></table>"
+        )
+        result = exporter.convert_fragment(html)
+
+        for line in result.splitlines():
+            if "Review" in line and line.strip().startswith("|"):
+                self.assertIn("\\|", line, "Pipe in list item should be escaped")

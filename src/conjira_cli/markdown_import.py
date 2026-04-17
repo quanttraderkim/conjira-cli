@@ -39,7 +39,33 @@ def markdown_to_storage_html(
     markdown = _strip_frontmatter(markdown).replace("\r\n", "\n").replace("\r", "\n")
     lines = markdown.split("\n")
     html_parts, _ = _parse_blocks(lines, 0, mermaid_macro_name=mermaid_macro_name)
-    return "".join(html_parts).strip()
+    result = "".join(html_parts).strip()
+    return _ensure_xhtml_self_closing(result)
+
+
+# Tags that must be self-closing in Confluence XHTML Storage Format
+_VOID_TAGS = {"br", "hr", "img"}
+_VOID_TAG_RE = re.compile(
+    r"<(" + "|".join(_VOID_TAGS) + r")((?:\s[^>]*?)?)(\s*/?)>",
+    re.IGNORECASE,
+)
+
+
+def _ensure_xhtml_self_closing(html_str: str) -> str:
+    """Normalise void HTML tags to XHTML self-closing form.
+
+    Confluence Storage Format requires strict XHTML: ``<br />`` not ``<br>``.
+    Handles ``<br>``, ``<br/>``, ``<br />``, and variants with attributes.
+    """
+    def _fix(m: re.Match[str]) -> str:
+        tag = m.group(1)
+        attrs = (m.group(2) or "").rstrip()
+        # Strip any trailing slash already present in attrs
+        if attrs.endswith("/"):
+            attrs = attrs[:-1].rstrip()
+        return f"<{tag}{attrs} />"
+
+    return _VOID_TAG_RE.sub(_fix, html_str)
 
 
 def _strip_frontmatter(markdown: str) -> str:

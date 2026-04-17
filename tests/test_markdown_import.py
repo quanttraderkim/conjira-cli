@@ -153,3 +153,37 @@ class MarkdownImportTests(unittest.TestCase):
         self.assertIn('<ac:structured-macro ac:name="status"', result)
         self.assertIn('<ac:parameter ac:name="colour">Blue</ac:parameter>', result)
         self.assertIn('<ac:parameter ac:name="title">Planned</ac:parameter>', result)
+
+    def test_xhtml_self_closing_br_tags(self) -> None:
+        """<br> must be emitted as <br /> for Confluence XHTML strict mode."""
+        # The current renderer doesn't emit bare <br> from markdown, but
+        # if inline HTML sneaks through we need the post-processor to fix it.
+        from conjira_cli.markdown_import import _ensure_xhtml_self_closing
+
+        self.assertEqual(_ensure_xhtml_self_closing("<br>"), "<br />")
+        self.assertEqual(_ensure_xhtml_self_closing("<br/>"), "<br />")
+        self.assertEqual(_ensure_xhtml_self_closing("<br />"), "<br />")
+        self.assertEqual(_ensure_xhtml_self_closing("<hr>"), "<hr />")
+        self.assertEqual(
+            _ensure_xhtml_self_closing("<p>text<br>more</p>"),
+            "<p>text<br />more</p>",
+        )
+
+    def test_xhtml_self_closing_preserves_attributes(self) -> None:
+        from conjira_cli.markdown_import import _ensure_xhtml_self_closing
+
+        self.assertEqual(
+            _ensure_xhtml_self_closing('<hr class="divider">'),
+            '<hr class="divider" />',
+        )
+
+    def test_output_is_valid_xhtml(self) -> None:
+        """Full markdown-to-HTML output must be well-formed XHTML."""
+        import xml.etree.ElementTree as ET
+
+        result = markdown_to_storage_html(
+            "# Hello\n\nParagraph with **bold**.\n\n---\n"
+        )
+        wrapped = f'<root xmlns:ac="urn:ac" xmlns:ri="urn:ri">{result}</root>'
+        # Should not raise
+        ET.fromstring(wrapped)

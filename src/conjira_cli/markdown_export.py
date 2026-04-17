@@ -470,16 +470,25 @@ class MarkdownExporter:
             child_name = _local_name(child.tag)
             if child_name in {"ul", "ol"}:
                 list_text = self._render_block(child, indent=0).strip().replace("\n", "<br>")
+                # Escape pipes BEFORE joining so nested content doesn't
+                # break the outer table column boundaries.
+                list_text = list_text.replace("|", "\\|")
                 pieces.append(list_text)
             elif child_name == "table":
                 table_text = self._render_table(child).replace("\n", "<br>")
+                # Escape pipes from the nested table so they don't create
+                # spurious columns in the parent table row.
+                table_text = table_text.replace("|", "\\|")
                 pieces.append(table_text)
             else:
                 pieces.append(self._render_inline(child))
             if child.tail and _collapse_inline(child.tail):
                 pieces.append(_collapse_inline(child.tail))
         joined = _join_inline_pieces(pieces)
-        joined = joined.replace("|", "\\|")
+        # Escape any remaining unescaped pipes from inline content.
+        # Use a negative lookbehind to avoid double-escaping pipes that
+        # were already escaped above.
+        joined = re.sub(r"(?<!\\)\|", r"\\|", joined)
         joined = joined.replace("\n", "<br>")
         joined = re.sub(r"\s{2,}", " ", joined)
         joined = re.sub(r"^(<br>\s*)+$", "", joined)
