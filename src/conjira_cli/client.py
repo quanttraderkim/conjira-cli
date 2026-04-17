@@ -5,6 +5,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, Iterable, Optional
 
 from conjira_cli.inline_comments import build_inline_comment_summary
@@ -29,6 +30,28 @@ class ConfluenceError(AtlassianError):
 
 class JiraError(AtlassianError):
     pass
+
+
+def validate_storage_html(body_html: str) -> None:
+    """Check that *body_html* is well-formed XHTML before sending to Confluence.
+
+    Raises :class:`ConfluenceError` with a descriptive message if parsing
+    fails, giving the caller a chance to fix the content instead of getting
+    a cryptic 400 from the server.
+    """
+    wrapped = (
+        '<root xmlns:ac="urn:ac" xmlns:ri="urn:ri"'
+        ' xmlns:atlassian="urn:atlassian">'
+        + body_html
+        + "</root>"
+    )
+    try:
+        ET.fromstring(wrapped)
+    except ET.ParseError as exc:
+        raise ConfluenceError(
+            f"Body HTML is not well-formed XHTML — Confluence will reject it. "
+            f"Detail: {exc}",
+        ) from exc
 
 
 class BaseAtlassianClient:
@@ -168,6 +191,7 @@ class ConfluenceClient(BaseAtlassianClient):
         body_html: str,
         parent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
+        validate_storage_html(body_html)
         payload: Dict[str, Any] = {
             "type": "page",
             "title": title,
@@ -214,6 +238,8 @@ class ConfluenceClient(BaseAtlassianClient):
         updated_body = new_body_html if new_body_html is not None else current_body
         if append_html:
             updated_body += append_html
+
+        validate_storage_html(updated_body)
 
         payload = {
             "id": current["id"],

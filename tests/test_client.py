@@ -192,3 +192,41 @@ class ClientTests(unittest.TestCase):
 
         self.assertEqual([page["id"] for page in pages], ["1", "2", "3"])
         self.assertEqual(mock_get_child_pages.call_count, 2)
+
+
+class ValidateStorageHtmlTests(unittest.TestCase):
+    def test_valid_xhtml_passes(self) -> None:
+        from conjira_cli.client import validate_storage_html
+
+        # Should not raise
+        validate_storage_html("<p>Hello <strong>world</strong></p>")
+
+    def test_invalid_xhtml_raises(self) -> None:
+        from conjira_cli.client import validate_storage_html, ConfluenceError
+
+        with self.assertRaises(ConfluenceError) as ctx:
+            validate_storage_html("<p>Unclosed paragraph")
+        self.assertIn("well-formed XHTML", str(ctx.exception))
+
+    def test_bare_br_is_invalid(self) -> None:
+        from conjira_cli.client import validate_storage_html, ConfluenceError
+
+        with self.assertRaises(ConfluenceError):
+            validate_storage_html("<p>line<br>break</p>")
+
+    def test_valid_xhtml_with_confluence_macros_passes(self) -> None:
+        from conjira_cli.client import validate_storage_html
+
+        validate_storage_html(
+            '<ac:structured-macro ac:name="code" ac:schema-version="1">'
+            '<ac:parameter ac:name="language">python</ac:parameter>'
+            '<ac:plain-text-body><![CDATA[print("hi")]]></ac:plain-text-body>'
+            "</ac:structured-macro>"
+        )
+
+    def test_valid_xhtml_with_atlassian_namespace_passes(self) -> None:
+        from conjira_cli.client import validate_storage_html
+
+        validate_storage_html(
+            '<td atlassian:data-highlight-colour="blue">text</td>'
+        )
