@@ -40,7 +40,8 @@ def validate_storage_html(body_html: str) -> None:
     a cryptic 400 from the server.
     """
     wrapped = (
-        '<root xmlns:ac="urn:ac" xmlns:ri="urn:ri">'
+        '<root xmlns:ac="urn:ac" xmlns:ri="urn:ri"'
+        ' xmlns:atlassian="urn:atlassian">'
         + body_html
         + "</root>"
     )

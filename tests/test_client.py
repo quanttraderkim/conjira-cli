@@ -213,3 +213,20 @@ class ValidateStorageHtmlTests(unittest.TestCase):
 
         with self.assertRaises(ConfluenceError):
             validate_storage_html("<p>line<br>break</p>")
+
+    def test_valid_xhtml_with_confluence_macros_passes(self) -> None:
+        from conjira_cli.client import validate_storage_html
+
+        validate_storage_html(
+            '<ac:structured-macro ac:name="code" ac:schema-version="1">'
+            '<ac:parameter ac:name="language">python</ac:parameter>'
+            '<ac:plain-text-body><![CDATA[print("hi")]]></ac:plain-text-body>'
+            "</ac:structured-macro>"
+        )
+
+    def test_valid_xhtml_with_atlassian_namespace_passes(self) -> None:
+        from conjira_cli.client import validate_storage_html
+
+        validate_storage_html(
+            '<td atlassian:data-highlight-colour="blue">text</td>'
+        )

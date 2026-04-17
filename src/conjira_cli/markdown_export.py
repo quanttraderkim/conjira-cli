@@ -470,15 +470,17 @@ class MarkdownExporter:
             child_name = _local_name(child.tag)
             if child_name in {"ul", "ol"}:
                 list_text = self._render_block(child, indent=0).strip().replace("\n", "<br>")
-                # Escape pipes BEFORE joining so nested content doesn't
-                # break the outer table column boundaries.
-                list_text = list_text.replace("|", "\\|")
+                # Escape unescaped pipes BEFORE joining so nested content
+                # doesn't break the outer table column boundaries.
+                # Use negative lookbehind to avoid double-escaping pipes
+                # that were already escaped by deeper recursion.
+                list_text = re.sub(r"(?<!\\)\|", r"\\|", list_text)
                 pieces.append(list_text)
             elif child_name == "table":
                 table_text = self._render_table(child).replace("\n", "<br>")
-                # Escape pipes from the nested table so they don't create
-                # spurious columns in the parent table row.
-                table_text = table_text.replace("|", "\\|")
+                # Escape unescaped pipes from the nested table so they
+                # don't create spurious columns in the parent table row.
+                table_text = re.sub(r"(?<!\\)\|", r"\\|", table_text)
                 pieces.append(table_text)
             else:
                 pieces.append(self._render_inline(child))

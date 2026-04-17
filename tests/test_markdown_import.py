@@ -177,6 +177,14 @@ class MarkdownImportTests(unittest.TestCase):
             '<hr class="divider" />',
         )
 
+    def test_xhtml_self_closing_img_tag(self) -> None:
+        from conjira_cli.markdown_import import _ensure_xhtml_self_closing
+
+        self.assertEqual(
+            _ensure_xhtml_self_closing('<img src="x.png">'),
+            '<img src="x.png" />',
+        )
+
     def test_output_is_valid_xhtml(self) -> None:
         """Full markdown-to-HTML output must be well-formed XHTML."""
         import xml.etree.ElementTree as ET
