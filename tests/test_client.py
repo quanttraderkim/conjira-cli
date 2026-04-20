@@ -4,6 +4,21 @@ from unittest import mock
 from conjira_cli.client import ConfluenceClient, JiraClient
 
 
+class _FakeHTTPResponse:
+    def __init__(self, body: str, *, content_type: str) -> None:
+        self._body = body.encode("utf-8")
+        self.headers = {"Content-Type": content_type}
+
+    def read(self) -> bytes:
+        return self._body
+
+    def __enter__(self) -> "_FakeHTTPResponse":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
 class ClientTests(unittest.TestCase):
     def test_update_page_from_snapshot_uses_snapshot_version_and_id(self) -> None:
         client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
@@ -193,7 +208,6 @@ class ClientTests(unittest.TestCase):
         self.assertEqual([page["id"] for page in pages], ["1", "2", "3"])
         self.assertEqual(mock_get_child_pages.call_count, 2)
 
-
 class ValidateStorageHtmlTests(unittest.TestCase):
     def test_valid_xhtml_passes(self) -> None:
         from conjira_cli.client import validate_storage_html
@@ -230,3 +244,32 @@ class ValidateStorageHtmlTests(unittest.TestCase):
         validate_storage_html(
             '<td atlassian:data-highlight-colour="blue">text</td>'
         )
+
+    def test_get_page_parses_json_even_when_content_type_is_not_json(self) -> None:
+        client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
+        body = (
+            '{"id":"123","type":"page","status":"current","title":"Demo",'
+            '"space":{"key":"TEST"},"version":{"number":7}}'
+        )
+
+        with mock.patch(
+            "conjira_cli.client.urllib.request.urlopen",
+            return_value=_FakeHTTPResponse(body, content_type="text/plain; charset=utf-8"),
+        ):
+            page = client.get_page("123")
+
+        self.assertEqual(page["id"], "123")
+        self.assertEqual(ConfluenceClient.summarize_page(page)["title"], "Demo")
+
+    def test_jira_auth_check_parses_json_even_when_content_type_is_not_json(self) -> None:
+        client = JiraClient(base_url="https://jira.example.com", token="token")
+        body = '{"version":"10.3.16","buildNumber":10030016,"deploymentType":"Server"}'
+
+        with mock.patch(
+            "conjira_cli.client.urllib.request.urlopen",
+            return_value=_FakeHTTPResponse(body, content_type="text/plain; charset=utf-8"),
+        ):
+            payload = client.auth_check()
+
+        self.assertEqual(payload["version"], "10.3.16")
+        self.assertEqual(payload["build_number"], 10030016)

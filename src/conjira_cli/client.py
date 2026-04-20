@@ -106,8 +106,15 @@ class BaseAtlassianClient:
                 raw = response.read().decode("utf-8")
                 if not raw:
                     return None
-                if "application/json" in response.headers.get("Content-Type", ""):
+                content_type = response.headers.get("Content-Type", "")
+                if "application/json" in content_type:
                     return json.loads(raw)
+                stripped = raw.lstrip()
+                if stripped.startswith("{") or stripped.startswith("["):
+                    try:
+                        return json.loads(raw)
+                    except json.JSONDecodeError:
+                        pass
                 return raw
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", errors="replace")
