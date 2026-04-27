@@ -282,3 +282,19 @@ class MarkdownImportTests(unittest.TestCase):
         )
         wrapped = f'<root xmlns:ac="urn:ac" xmlns:ri="urn:ri">{result}</root>'
         ET.fromstring(wrapped)
+
+    def test_table_cell_html_block_emits_trailing_content_verbatim(self) -> None:
+        """Trailing content after an HTML block in a cell is emitted verbatim, not re-rendered."""
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| A | B |",
+                    "| --- | --- |",
+                    "| 1 | <ul><li>x</li></ul> trailing [link](http://example.com) |",
+                ]
+            )
+        )
+
+        # Whole cell goes through as raw HTML; trailing markdown is NOT rendered.
+        self.assertIn("<ul><li>x</li></ul> trailing [link](http://example.com)", result)
+        self.assertNotIn('<a href="http://example.com">', result)

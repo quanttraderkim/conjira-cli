@@ -386,7 +386,7 @@ def _parse_table(lines: list[str], start: int) -> tuple[str, int]:
 
 
 _CELL_HTML_BLOCK_PREFIX_RE = re.compile(
-    r"^<(ul|ol|p|div|table|blockquote|h[1-6]|ac:[\w-]+|ri:[\w-]+)\b",
+    r"^<(ul|ol|p|div|table|blockquote|h[1-6]|ac:[\w-]+|ri:[\w-]+|atlassian:[\w-]+)\b",
     re.IGNORECASE,
 )
 _CELL_XML_WRAPPER_PREFIX = (
@@ -402,6 +402,9 @@ def _render_table_cell(cell: str) -> str:
     ``<p>``, etc.). When the cell content is a well-formed HTML block,
     we pass it through unchanged so users can hand-author rich cells
     without leaving the markdown pipeline.
+
+    Pass-through covers the entire cell: any trailing content after the
+    HTML block is emitted verbatim and not re-rendered as markdown.
     """
     stripped = cell.strip()
     if (
