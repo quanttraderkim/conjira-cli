@@ -195,3 +195,106 @@ class MarkdownImportTests(unittest.TestCase):
         wrapped = f'<root xmlns:ac="urn:ac" xmlns:ri="urn:ri">{result}</root>'
         # Should not raise
         ET.fromstring(wrapped)
+
+    def test_table_cell_passes_through_raw_html_list(self) -> None:
+        """Cells containing well-formed HTML blocks (e.g. nested <ul>) survive."""
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| 구분 | 내용 |",
+                    "| --- | --- |",
+                    "| 포인트 지급 | <ul><li>휴대폰 포인트 지급<ul><li>MDN 기준</li></ul></li></ul> |",
+                ]
+            )
+        )
+
+        self.assertIn(
+            "<td><ul><li>휴대폰 포인트 지급<ul><li>MDN 기준</li></ul></li></ul></td>",
+            result,
+        )
+        self.assertNotIn("&lt;ul&gt;", result)
+
+    def test_table_cell_passes_through_storage_macro(self) -> None:
+        """Cells containing ac:* / ri:* storage-format macros pass through."""
+        cell_html = (
+            '<ac:structured-macro ac:name="status" ac:schema-version="1">'
+            '<ac:parameter ac:name="colour">Green</ac:parameter>'
+            '<ac:parameter ac:name="title">Done</ac:parameter>'
+            "</ac:structured-macro>"
+        )
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| Item | Status |",
+                    "| --- | --- |",
+                    "| API | {0} |".format(cell_html),
+                ]
+            )
+        )
+
+        self.assertIn(cell_html, result)
+        self.assertNotIn("&lt;ac:", result)
+
+    def test_table_cell_with_inline_text_still_escapes(self) -> None:
+        """Cells without HTML block content still get inline escaping."""
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| Title | Note |",
+                    "| --- | --- |",
+                    "| 5 < 10 | not html |",
+                ]
+            )
+        )
+
+        self.assertIn("<td>5 &lt; 10</td>", result)
+        self.assertIn("<td>not html</td>", result)
+
+    def test_table_cell_with_malformed_html_falls_back_to_inline(self) -> None:
+        """If a cell looks like HTML but isn't well-formed, escape it instead of breaking the page."""
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| Item | Note |",
+                    "| --- | --- |",
+                    "| <ul><li>unclosed | broken |",
+                ]
+            )
+        )
+
+        # Malformed HTML must not pass through; it should be escaped.
+        self.assertNotIn("<td><ul><li>unclosed", result)
+        self.assertIn("&lt;ul&gt;", result)
+
+    def test_table_with_html_cells_is_valid_xhtml(self) -> None:
+        """Tables with HTML pass-through cells must produce valid XHTML."""
+        import xml.etree.ElementTree as ET
+
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| 구분 | 내용 |",
+                    "| --- | --- |",
+                    "| A | <ul><li>x<ul><li>y</li></ul></li></ul> |",
+                    "| B | plain text |",
+                ]
+            )
+        )
+        wrapped = f'<root xmlns:ac="urn:ac" xmlns:ri="urn:ri">{result}</root>'
+        ET.fromstring(wrapped)
+
+    def test_table_cell_html_block_emits_trailing_content_verbatim(self) -> None:
+        """Trailing content after an HTML block in a cell is emitted verbatim, not re-rendered."""
+        result = markdown_to_storage_html(
+            "\n".join(
+                [
+                    "| A | B |",
+                    "| --- | --- |",
+                    "| 1 | <ul><li>x</li></ul> trailing [link](http://example.com) |",
+                ]
+            )
+        )
+
+        # Whole cell goes through as raw HTML; trailing markdown is NOT rendered.
+        self.assertIn("<ul><li>x</li></ul> trailing [link](http://example.com)", result)
+        self.assertNotIn('<a href="http://example.com">', result)
