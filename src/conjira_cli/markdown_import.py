@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import os
 import re
+import xml.etree.ElementTree as ET
 from typing import Optional
 
 
@@ -371,17 +372,53 @@ def _parse_table(lines: list[str], start: int) -> tuple[str, int]:
     if has_header:
         parts.append(
             "<tr>{0}</tr>".format(
-                "".join("<th>{0}</th>".format(_render_inline(cell)) for cell in rows[0])
+                "".join("<th>{0}</th>".format(_render_table_cell(cell)) for cell in rows[0])
             )
         )
     for row in body_rows:
         parts.append(
             "<tr>{0}</tr>".format(
-                "".join("<td>{0}</td>".format(_render_inline(cell)) for cell in row)
+                "".join("<td>{0}</td>".format(_render_table_cell(cell)) for cell in row)
             )
         )
     parts.append("</tbody></table>")
     return "".join(parts), i
+
+
+_CELL_HTML_BLOCK_PREFIX_RE = re.compile(
+    r"^<(ul|ol|p|div|table|blockquote|h[1-6]|ac:[\w-]+|ri:[\w-]+)\b",
+    re.IGNORECASE,
+)
+_CELL_XML_WRAPPER_PREFIX = (
+    '<root xmlns:ac="urn:ac" xmlns:ri="urn:ri" xmlns:atlassian="urn:atlassian">'
+)
+
+
+def _render_table_cell(cell: str) -> str:
+    """Render a markdown table cell.
+
+    Standard markdown tables only support inline content per cell, but
+    Confluence cells frequently need nested structures (``<ul><li>``,
+    ``<p>``, etc.). When the cell content is a well-formed HTML block,
+    we pass it through unchanged so users can hand-author rich cells
+    without leaving the markdown pipeline.
+    """
+    stripped = cell.strip()
+    if (
+        stripped.startswith("<")
+        and _CELL_HTML_BLOCK_PREFIX_RE.match(stripped)
+        and _is_well_formed_xhtml(stripped)
+    ):
+        return stripped
+    return _render_inline(cell)
+
+
+def _is_well_formed_xhtml(fragment: str) -> bool:
+    try:
+        ET.fromstring(_CELL_XML_WRAPPER_PREFIX + fragment + "</root>")
+    except ET.ParseError:
+        return False
+    return True
 
 
 def _split_table_row(line: str) -> list[str]:
