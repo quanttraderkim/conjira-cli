@@ -6,8 +6,10 @@ from unittest import mock
 
 from conjira_cli.cli import (
     _build_error_payload,
+    _build_parser,
     _handle_confluence,
     _handle_jira,
+    _normalize_id,
     _read_confluence_body_arg,
     _read_optional_confluence_body_arg,
     _read_export_metadata,
@@ -24,6 +26,28 @@ class CliTests(unittest.TestCase):
             _sanitize_markdown_filename('A/B:C*D?'),
             'A_B_C_D_.md',
         )
+
+    def test_normalize_id_strips_trailing_slash(self) -> None:
+        self.assertEqual(_normalize_id("12345/"), "12345")
+        self.assertEqual(_normalize_id("PROJ-123/"), "PROJ-123")
+
+    def test_normalize_id_strips_whitespace_and_multiple_slashes(self) -> None:
+        self.assertEqual(_normalize_id("  12345  "), "12345")
+        self.assertEqual(_normalize_id("12345///"), "12345")
+
+    def test_normalize_id_passthrough_when_clean(self) -> None:
+        self.assertEqual(_normalize_id("12345"), "12345")
+        self.assertEqual(_normalize_id("PROJ-123"), "PROJ-123")
+
+    def test_page_id_argument_normalizes_trailing_slash(self) -> None:
+        parser = _build_parser()
+        args = parser.parse_args(["get-page", "--page-id", "12345/"])
+        self.assertEqual(args.page_id, "12345")
+
+    def test_issue_key_argument_normalizes_trailing_slash(self) -> None:
+        parser = _build_parser()
+        args = parser.parse_args(["jira-get-issue", "--issue-key", "PROJ-123/"])
+        self.assertEqual(args.issue_key, "PROJ-123")
 
     def test_resolve_export_output_path_uses_default_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

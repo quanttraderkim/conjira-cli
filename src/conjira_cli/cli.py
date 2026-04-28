@@ -49,6 +49,12 @@ def _read_text_arg(raw_text: Optional[str], file_path: Optional[str]) -> str:
     return ""
 
 
+def _normalize_id(value: str) -> str:
+    # Strip whitespace and trailing slashes so URL-derived IDs like
+    # "1025003939/" (from a pasted Confluence URL) don't break path joins.
+    return value.strip().strip("/")
+
+
 def _read_json_arg(raw_json: Optional[str], file_path: Optional[str]) -> Dict[str, Any]:
     if raw_json is not None:
         return json.loads(raw_json)
@@ -303,14 +309,14 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("auth-check", help="Validate Confluence base URL and PAT")
 
     get_page = subparsers.add_parser("get-page", help="Fetch a Confluence page by ID")
-    get_page.add_argument("--page-id", required=True)
+    get_page.add_argument("--page-id", required=True, type=_normalize_id)
     get_page.add_argument("--expand")
 
     export_page_md = subparsers.add_parser(
         "export-page-md",
         help="Export a Confluence page to a Markdown file",
     )
-    export_page_md.add_argument("--page-id", required=True)
+    export_page_md.add_argument("--page-id", required=True, type=_normalize_id)
     export_page_md.add_argument("--output-file")
     export_page_md.add_argument("--output-dir")
     export_page_md.add_argument("--filename")
@@ -320,7 +326,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "export-tree-md",
         help="Export a Confluence page tree to nested Markdown folders",
     )
-    export_tree_md.add_argument("--page-id", required=True)
+    export_tree_md.add_argument("--page-id", required=True, type=_normalize_id)
     export_tree_md.add_argument("--output-dir")
     export_tree_md.add_argument("--staging-local", action="store_true")
 
@@ -340,7 +346,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "get-inline-comments",
         help="Fetch Confluence inline comments and group them into threads",
     )
-    get_inline_comments.add_argument("--page-id", required=True)
+    get_inline_comments.add_argument("--page-id", required=True, type=_normalize_id)
     get_inline_comments.add_argument("--limit", type=int, default=200)
     get_inline_comments.add_argument(
         "--status",
@@ -352,7 +358,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "export-inline-comments-md",
         help="Export grouped Confluence inline comments to a Markdown file",
     )
-    export_inline_comments_md.add_argument("--page-id", required=True)
+    export_inline_comments_md.add_argument("--page-id", required=True, type=_normalize_id)
     export_inline_comments_md.add_argument("--limit", type=int, default=200)
     export_inline_comments_md.add_argument(
         "--status",
@@ -377,7 +383,7 @@ def _build_parser() -> argparse.ArgumentParser:
     create_page_body_group.add_argument("--body-markdown-file")
 
     update_page = subparsers.add_parser("update-page", help="Update an existing Confluence page")
-    update_page.add_argument("--page-id", required=True)
+    update_page.add_argument("--page-id", required=True, type=_normalize_id)
     update_page.add_argument("--allow-write", action="store_true")
     update_page.add_argument("--dry-run", action="store_true")
     update_page.add_argument("--title")
@@ -396,7 +402,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "replace-section",
         help="Replace the content under a specific Confluence heading",
     )
-    replace_section.add_argument("--page-id", required=True)
+    replace_section.add_argument("--page-id", required=True, type=_normalize_id)
     replace_section.add_argument("--heading", required=True)
     replace_section.add_argument("--allow-write", action="store_true")
     replace_section.add_argument("--dry-run", action="store_true")
@@ -410,7 +416,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "insert-after-heading",
         help="Insert content immediately after a specific Confluence heading",
     )
-    insert_after_heading.add_argument("--page-id", required=True)
+    insert_after_heading.add_argument("--page-id", required=True, type=_normalize_id)
     insert_after_heading.add_argument("--heading", required=True)
     insert_after_heading.add_argument("--allow-write", action="store_true")
     insert_after_heading.add_argument("--dry-run", action="store_true")
@@ -426,7 +432,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "move-page",
         help="Move an existing Confluence page under a different parent page",
     )
-    move_page.add_argument("--page-id", required=True)
+    move_page.add_argument("--page-id", required=True, type=_normalize_id)
     move_page.add_argument("--new-parent-id", required=True)
     move_page.add_argument("--allow-write", action="store_true")
     move_page.add_argument("--dry-run", action="store_true")
@@ -435,7 +441,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "upload-attachment",
         help="Upload or update a Confluence attachment on a page",
     )
-    upload_attachment.add_argument("--page-id", required=True)
+    upload_attachment.add_argument("--page-id", required=True, type=_normalize_id)
     upload_attachment.add_argument("--file", required=True)
     upload_attachment.add_argument("--comment")
     upload_attachment.add_argument("--allow-write", action="store_true")
@@ -451,7 +457,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("jira-auth-check", help="Validate Jira base URL and PAT")
 
     jira_get_issue = subparsers.add_parser("jira-get-issue", help="Fetch a Jira issue by key")
-    jira_get_issue.add_argument("--issue-key", required=True)
+    jira_get_issue.add_argument("--issue-key", required=True, type=_normalize_id)
     jira_get_issue.add_argument("--fields")
     jira_get_issue.add_argument("--expand")
     jira_get_issue.add_argument("--include-comments", action="store_true")
@@ -488,7 +494,7 @@ def _build_parser() -> argparse.ArgumentParser:
     jira_create_issue_fields_group.add_argument("--fields-file")
 
     jira_add_comment = subparsers.add_parser("jira-add-comment", help="Add a Jira issue comment")
-    jira_add_comment.add_argument("--issue-key", required=True)
+    jira_add_comment.add_argument("--issue-key", required=True, type=_normalize_id)
     jira_add_comment.add_argument("--allow-write", action="store_true")
     jira_add_comment.add_argument("--dry-run", action="store_true")
     jira_comment_group = jira_add_comment.add_mutually_exclusive_group(required=True)
