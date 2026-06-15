@@ -231,7 +231,33 @@ security add-generic-password -U -s conjira-cli -a jira-prod -w "$PAT"
 unset PAT
 ```
 
-On Linux or Windows, use environment variables or token files instead of Keychain. For example:
+On Windows, use Windows Credential Manager as the closest Keychain-style path. Keep `local/agent.env` non-secret, remove or comment out `CONFLUENCE_PAT_KEYCHAIN_*` and `JIRA_PAT_KEYCHAIN_*`, then load PATs into the current PowerShell session right before running `conjira`.
+
+Set up the PowerShell `CredentialManager` module and store the PATs once:
+
+```powershell
+Install-Module CredentialManager -Scope CurrentUser
+
+$cred = Get-Credential -UserName confluence-prod -Message "Enter Confluence PAT as password"
+New-StoredCredential -Target "conjira-cli/confluence-prod" -UserName $cred.UserName -Password $cred.GetNetworkCredential().Password -Persist LocalMachine
+Remove-Variable cred
+
+$cred = Get-Credential -UserName jira-prod -Message "Enter Jira PAT as password"
+New-StoredCredential -Target "conjira-cli/jira-prod" -UserName $cred.UserName -Password $cred.GetNetworkCredential().Password -Persist LocalMachine
+Remove-Variable cred
+```
+
+Before running the CLI in a new PowerShell session, read those credentials into environment variables. The values only live in that session:
+
+```powershell
+$env:CONFLUENCE_PAT = (Get-StoredCredential -Target "conjira-cli/confluence-prod").GetNetworkCredential().Password
+$env:JIRA_PAT = (Get-StoredCredential -Target "conjira-cli/jira-prod").GetNetworkCredential().Password
+
+conjira --env-file .\local\agent.env auth-check
+conjira --env-file .\local\agent.env jira-auth-check
+```
+
+If Windows Credential Manager is unavailable, or on Linux, use environment variables or token files instead. For example:
 
 ```dotenv
 CONFLUENCE_BASE_URL=https://confluence.example.com

@@ -231,7 +231,33 @@ security add-generic-password -U -s conjira-cli -a jira-prod -w "$PAT"
 unset PAT
 ```
 
-Linux나 Windows에서는 Keychain 대신 환경변수나 token file을 쓰면 됩니다.
+Windows에서는 Keychain 대신 Windows Credential Manager에 PAT를 저장하고, 실행 직전에 현재 PowerShell 세션의 환경변수로만 주입하는 방식을 권장합니다. `local/agent.env`에는 base URL과 export 경로 같은 비밀이 아닌 값만 두고, `CONFLUENCE_PAT_KEYCHAIN_*`, `JIRA_PAT_KEYCHAIN_*` 항목은 제거하거나 주석 처리합니다.
+
+처음 한 번만 PowerShell에서 `CredentialManager` 모듈을 준비하고 PAT를 저장합니다.
+
+```powershell
+Install-Module CredentialManager -Scope CurrentUser
+
+$cred = Get-Credential -UserName confluence-prod -Message "Enter Confluence PAT as password"
+New-StoredCredential -Target "conjira-cli/confluence-prod" -UserName $cred.UserName -Password $cred.GetNetworkCredential().Password -Persist LocalMachine
+Remove-Variable cred
+
+$cred = Get-Credential -UserName jira-prod -Message "Enter Jira PAT as password"
+New-StoredCredential -Target "conjira-cli/jira-prod" -UserName $cred.UserName -Password $cred.GetNetworkCredential().Password -Persist LocalMachine
+Remove-Variable cred
+```
+
+이후 `conjira`를 실행할 때마다 필요한 세션에서 Credential Manager 값을 환경변수로 읽어옵니다. 이 값은 현재 PowerShell 세션에만 남습니다.
+
+```powershell
+$env:CONFLUENCE_PAT = (Get-StoredCredential -Target "conjira-cli/confluence-prod").GetNetworkCredential().Password
+$env:JIRA_PAT = (Get-StoredCredential -Target "conjira-cli/jira-prod").GetNetworkCredential().Password
+
+conjira --env-file .\local\agent.env auth-check
+conjira --env-file .\local\agent.env jira-auth-check
+```
+
+Windows Credential Manager를 쓰기 어렵거나 Linux 환경이라면 환경변수나 token file을 사용하면 됩니다.
 
 ```dotenv
 CONFLUENCE_BASE_URL=https://confluence.example.com
