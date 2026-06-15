@@ -24,7 +24,7 @@ The `local/agent.env` file is intentionally gitignored. It stores machine-specif
 
 The actual PAT should stay in a local secret store when possible, not in chat, not in source code, and not in tracked `.env` files.
 
-On macOS, Keychain is the recommended local path. On Linux or Windows, prefer environment variables or token files.
+On macOS, Keychain is the recommended local path. On Windows, prefer Windows Credential Manager and load PATs into the current PowerShell session before running the CLI. On Linux, prefer environment variables or token files.
 
 The preferred storage policy is:
 
@@ -231,7 +231,28 @@ security add-generic-password -U -s conjira-cli -a jira-prod -w "$PAT"
 unset PAT
 ```
 
-If Keychain is not available, store PATs in env vars or token files instead:
+On Windows, store PATs in Windows Credential Manager and expose them only to the current PowerShell session before running the CLI. Remove or comment out `CONFLUENCE_PAT_KEYCHAIN_*` and `JIRA_PAT_KEYCHAIN_*` in `local/agent.env` so the CLI does not try the macOS Keychain path first.
+
+```powershell
+Install-Module CredentialManager -Scope CurrentUser
+
+$cred = Get-Credential -UserName confluence-prod -Message "Enter Confluence PAT as password"
+New-StoredCredential -Target "conjira-cli/confluence-prod" -UserName $cred.UserName -Password $cred.GetNetworkCredential().Password -Persist LocalMachine
+Remove-Variable cred
+
+$cred = Get-Credential -UserName jira-prod -Message "Enter Jira PAT as password"
+New-StoredCredential -Target "conjira-cli/jira-prod" -UserName $cred.UserName -Password $cred.GetNetworkCredential().Password -Persist LocalMachine
+Remove-Variable cred
+```
+
+Then load the PATs for the current session:
+
+```powershell
+$env:CONFLUENCE_PAT = (Get-StoredCredential -Target "conjira-cli/confluence-prod").GetNetworkCredential().Password
+$env:JIRA_PAT = (Get-StoredCredential -Target "conjira-cli/jira-prod").GetNetworkCredential().Password
+```
+
+If Keychain or Windows Credential Manager is not available, store PATs in env vars or token files instead:
 
 ```dotenv
 CONFLUENCE_BASE_URL=https://confluence.example.com
