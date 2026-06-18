@@ -33,6 +33,8 @@ The preferred storage policy is:
 - `CONFLUENCE_EXPORT_DEFAULT_DIR` as the default final destination
 - `CONFLUENCE_EXPORT_STAGING_DIR` or `--staging-local` only for previews or short-lived working copies
 
+The CLI applies a shared client-side throttle by default (`CONJIRA_RATE_LIMIT_RPS=4.0`, `CONJIRA_RATE_LIMIT_BURST=8`) and automatically retries Confluence/Jira `429` responses with backoff. Keep the defaults unless the local Atlassian instance has a stricter published limit.
+
 ## Typical commands
 
 Confluence auth check:
@@ -87,6 +89,12 @@ Read grouped inline comments on a Confluence page:
 
 ```bash
 ./bin/conjira --env-file ./local/agent.env get-inline-comments --page-id 123456 --status all
+```
+
+Read page footer comments and replies:
+
+```bash
+./bin/conjira --env-file ./local/agent.env get-footer-comments --page-id 123456
 ```
 
 Export inline comment threads to Markdown:

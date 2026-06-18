@@ -326,6 +326,66 @@ class CliTests(unittest.TestCase):
         mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space")
         mock_list_child_pages.assert_called_once_with("12345")
 
+    def test_handle_confluence_get_footer_comments_returns_summary(self) -> None:
+        args = SimpleNamespace(
+            command="get-footer-comments",
+            base_url=None,
+            token=None,
+            token_file=None,
+            token_keychain_service=None,
+            token_keychain_account=None,
+            timeout=None,
+            env_file=None,
+            page_id="12345",
+            limit=50,
+        )
+        settings = ConfluenceSettings(
+            base_url="https://confluence.example.com",
+            token="token",
+            timeout_seconds=30,
+        )
+        page = {
+            "id": "12345",
+            "title": "Demo Page",
+            "space": {"key": "DOCS"},
+            "version": {"number": 7},
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=12345",
+            },
+        }
+        comments = [
+            {
+                "id": "c1",
+                "status": "current",
+                "title": "Comment",
+                "body": {"storage": {"value": "<p>Footer comment</p>"}},
+                "history": {
+                    "createdDate": "2026-06-17T09:00:00+09:00",
+                    "createdBy": {"displayName": "Alex"},
+                },
+                "container": {"type": "page", "id": "12345"},
+                "_links": {"webui": "/display/DOCS/comment-c1"},
+            }
+        ]
+
+        with mock.patch("conjira_cli.cli.build_confluence_settings", return_value=settings), mock.patch(
+            "conjira_cli.cli.ConfluenceClient.get_page",
+            return_value=page,
+        ) as mock_get_page, mock.patch(
+            "conjira_cli.cli.ConfluenceClient.list_footer_comments",
+            return_value=comments,
+        ) as mock_list_footer_comments:
+            payload = _handle_confluence(args)
+
+        self.assertEqual(payload["page_id"], "12345")
+        self.assertEqual(payload["total_comments"], 1)
+        self.assertEqual(payload["root_comment_count"], 1)
+        self.assertEqual(payload["reply_comment_count"], 0)
+        self.assertEqual(payload["comments"][0]["body_text"], "Footer comment")
+        mock_get_page.assert_called_once_with("12345", expand="version,space")
+        mock_list_footer_comments.assert_called_once_with("12345", limit=50)
+
     def test_handle_confluence_export_page_md_generates_hub_markdown(self) -> None:
         args = SimpleNamespace(
             command="export-page-md",

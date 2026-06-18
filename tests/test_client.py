@@ -1,7 +1,10 @@
+import io
 import unittest
+import urllib.error
+from typing import Optional
 from unittest import mock
 
-from conjira_cli.client import ConfluenceClient, JiraClient
+from conjira_cli.client import ConfluenceClient, ConfluenceError, JiraClient
 
 
 class _FakeHTTPResponse:
@@ -17,6 +20,21 @@ class _FakeHTTPResponse:
 
     def __exit__(self, exc_type, exc, tb) -> bool:
         return False
+
+
+def _http_error(
+    status_code: int,
+    *,
+    body: str = '{"message":"Too many requests"}',
+    headers: Optional[dict[str, str]] = None,
+) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        "https://confluence.example.com/rest/api/content/123",
+        status_code,
+        "Too Many Requests",
+        headers or {},
+        io.BytesIO(body.encode("utf-8")),
+    )
 
 
 class ClientTests(unittest.TestCase):
@@ -192,6 +210,87 @@ class ClientTests(unittest.TestCase):
         self.assertEqual([comment["id"] for comment in comments], ["1", "2", "3"])
         self.assertEqual(mock_get_inline_comments.call_count, 2)
 
+    def test_get_footer_comments_uses_footer_location(self) -> None:
+        client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
+
+        with mock.patch.object(client, "request", return_value={"results": []}) as mock_request:
+            client.get_footer_comments("123", limit=50, start=10)
+
+        mock_request.assert_called_once_with(
+            "GET",
+            "/rest/api/content/123/child/comment",
+            query={
+                "location": "footer",
+                "expand": "body.storage,history,container,ancestors",
+                "limit": 50,
+                "start": 10,
+                "depth": "all",
+            },
+        )
+
+    def test_list_footer_comments_fetches_all_pages(self) -> None:
+        client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
+
+        with mock.patch.object(
+            client,
+            "get_footer_comments",
+            side_effect=[
+                {"results": [{"id": "1"}, {"id": "2"}]},
+                {"results": [{"id": "3"}]},
+            ],
+        ) as mock_get_footer_comments:
+            comments = client.list_footer_comments("123", limit=2)
+
+        self.assertEqual([comment["id"] for comment in comments], ["1", "2", "3"])
+        self.assertEqual(mock_get_footer_comments.call_count, 2)
+
+    def test_summarize_footer_comments_includes_reply_metadata(self) -> None:
+        client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
+        page = {
+            "id": "123",
+            "title": "Demo Page",
+            "_links": {
+                "base": "https://confluence.example.com",
+                "webui": "/pages/viewpage.action?pageId=123",
+            },
+        }
+        comments = [
+            {
+                "id": "c1",
+                "status": "current",
+                "title": "Root comment",
+                "body": {"storage": {"value": "<p>First footer comment</p>"}},
+                "history": {
+                    "createdDate": "2026-06-17T09:00:00+09:00",
+                    "createdBy": {"displayName": "Alex"},
+                },
+                "container": {"type": "page", "id": "123"},
+                "_links": {"webui": "/display/DOCS/comment-c1"},
+            },
+            {
+                "id": "c2",
+                "status": "current",
+                "title": "Reply comment",
+                "body": {"storage": {"value": "<p>Reply body</p>"}},
+                "history": {
+                    "createdDate": "2026-06-17T09:05:00+09:00",
+                    "createdBy": {"displayName": "Blair"},
+                },
+                "container": {"type": "comment", "id": "c1"},
+                "_links": {"webui": "/display/DOCS/comment-c2"},
+            },
+        ]
+
+        summary = client.summarize_footer_comments(page=page, comments=comments)
+
+        self.assertEqual(summary["total_comments"], 2)
+        self.assertEqual(summary["root_comment_count"], 1)
+        self.assertEqual(summary["reply_comment_count"], 1)
+        self.assertFalse(summary["comments"][0]["is_reply"])
+        self.assertTrue(summary["comments"][1]["is_reply"])
+        self.assertEqual(summary["comments"][1]["parent_comment_id"], "c1")
+        self.assertEqual(summary["comments"][0]["body_text"], "First footer comment")
+
     def test_list_child_pages_fetches_all_pages(self) -> None:
         client = ConfluenceClient(base_url="https://confluence.example.com", token="token")
 
@@ -207,6 +306,54 @@ class ClientTests(unittest.TestCase):
 
         self.assertEqual([page["id"] for page in pages], ["1", "2", "3"])
         self.assertEqual(mock_get_child_pages.call_count, 2)
+
+    def test_request_retries_429_using_retry_after_header(self) -> None:
+        client = ConfluenceClient(
+            base_url="https://confluence.example.com",
+            token="token",
+            rate_limit_enabled=False,
+        )
+
+        with mock.patch(
+            "conjira_cli.client.urllib.request.urlopen",
+            side_effect=[
+                _http_error(429, headers={"Retry-After": "2"}),
+                _FakeHTTPResponse('{"id":"123"}', content_type="application/json"),
+            ],
+        ) as mock_urlopen, mock.patch("conjira_cli.client.time.sleep") as mock_sleep:
+            page = client.get_page("123")
+
+        self.assertEqual(page["id"], "123")
+        self.assertEqual(mock_urlopen.call_count, 2)
+        mock_sleep.assert_called_once_with(2.0)
+
+    def test_request_stops_retrying_429_after_max_retries(self) -> None:
+        client = ConfluenceClient(
+            base_url="https://confluence.example.com",
+            token="token",
+            rate_limit_enabled=False,
+            max_retries=1,
+            retry_base_seconds=0.25,
+            retry_max_seconds=10.0,
+        )
+
+        with mock.patch(
+            "conjira_cli.client.urllib.request.urlopen",
+            side_effect=[
+                _http_error(429, body='{"message":"slow down"}'),
+                _http_error(429, body='{"message":"still slow"}'),
+            ],
+        ) as mock_urlopen, mock.patch(
+            "conjira_cli.client.random.uniform",
+            return_value=0.0,
+        ), mock.patch("conjira_cli.client.time.sleep") as mock_sleep:
+            with self.assertRaises(ConfluenceError) as ctx:
+                client.get_page("123")
+
+        self.assertEqual(str(ctx.exception), "still slow")
+        self.assertEqual(ctx.exception.status_code, 429)
+        self.assertEqual(mock_urlopen.call_count, 2)
+        mock_sleep.assert_called_once_with(0.25)
 
 class ValidateStorageHtmlTests(unittest.TestCase):
     def test_valid_xhtml_passes(self) -> None:

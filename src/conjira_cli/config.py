@@ -16,6 +16,12 @@ class BaseSettings:
     base_url: str
     token: str
     timeout_seconds: int = 30
+    rate_limit_enabled: Optional[bool] = None
+    rate_limit_rps: Optional[float] = None
+    rate_limit_burst: Optional[int] = None
+    max_retries: Optional[int] = None
+    retry_base_seconds: Optional[float] = None
+    retry_max_seconds: Optional[float] = None
 
 
 @dataclass
@@ -71,6 +77,65 @@ def _parse_csv_set(value: Optional[str]) -> Optional[Set[str]]:
         return None
     items = {item.strip() for item in value.split(",") if item.strip()}
     return items or None
+
+
+def _optional_bool(value: Optional[str]) -> Optional[bool]:
+    if value is None or not value.strip():
+        return None
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _optional_float(value: Optional[str]) -> Optional[float]:
+    if value is None or not value.strip():
+        return None
+    parsed = float(value)
+    return parsed if parsed > 0 else None
+
+
+def _optional_int(value: Optional[str]) -> Optional[int]:
+    if value is None or not value.strip():
+        return None
+    parsed = int(value)
+    return parsed if parsed >= 0 else None
+
+
+def _env_value(env: Dict[str, str], key: str) -> Optional[str]:
+    return os.environ.get(key) or env.get(key)
+
+
+def _product_or_global_env_value(
+    env: Dict[str, str],
+    *,
+    prefix: str,
+    suffix: str,
+) -> Optional[str]:
+    return (
+        _env_value(env, "{0}_{1}".format(prefix, suffix))
+        or _env_value(env, "CONJIRA_{0}".format(suffix))
+    )
+
+
+def _rate_limit_settings(env: Dict[str, str], *, prefix: str) -> Dict[str, object]:
+    return {
+        "rate_limit_enabled": _optional_bool(
+            _product_or_global_env_value(env, prefix=prefix, suffix="RATE_LIMIT_ENABLED")
+        ),
+        "rate_limit_rps": _optional_float(
+            _product_or_global_env_value(env, prefix=prefix, suffix="RATE_LIMIT_RPS")
+        ),
+        "rate_limit_burst": _optional_int(
+            _product_or_global_env_value(env, prefix=prefix, suffix="RATE_LIMIT_BURST")
+        ),
+        "max_retries": _optional_int(
+            _product_or_global_env_value(env, prefix=prefix, suffix="MAX_RETRIES")
+        ),
+        "retry_base_seconds": _optional_float(
+            _product_or_global_env_value(env, prefix=prefix, suffix="RETRY_BASE_SECONDS")
+        ),
+        "retry_max_seconds": _optional_float(
+            _product_or_global_env_value(env, prefix=prefix, suffix="RETRY_MAX_SECONDS")
+        ),
+    }
 
 
 def _read_token_from_file(path: Optional[str]) -> Optional[str]:
@@ -211,6 +276,7 @@ def build_confluence_settings(
         base_url=resolved_base_url.rstrip("/"),
         token=resolved_token,
         timeout_seconds=resolved_timeout,
+        **_rate_limit_settings(env, prefix="CONFLUENCE"),
         allowed_space_keys=allowed_space_keys,
         allowed_parent_ids=allowed_parent_ids,
         allowed_page_ids=allowed_page_ids,
@@ -251,6 +317,7 @@ def build_jira_settings(
         base_url=resolved_base_url.rstrip("/"),
         token=resolved_token,
         timeout_seconds=resolved_timeout,
+        **_rate_limit_settings(env, prefix="JIRA"),
         allowed_project_keys=allowed_project_keys,
         allowed_issue_keys=allowed_issue_keys,
     )

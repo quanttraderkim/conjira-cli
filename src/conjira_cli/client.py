@@ -1,14 +1,38 @@
 from __future__ import annotations
 
+import email.utils
+import hashlib
 import json
+import os
+import random
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
+from conjira_cli.footer_comments import build_footer_comment_summary
 from conjira_cli.inline_comments import build_inline_comment_summary
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None  # type: ignore[assignment]
+
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX fallback
+    msvcrt = None  # type: ignore[assignment]
+
+
+DEFAULT_RATE_LIMIT_RPS = 4.0
+DEFAULT_RATE_LIMIT_BURST = 8
+DEFAULT_MAX_RETRIES = 5
+DEFAULT_RETRY_BASE_SECONDS = 1.0
+DEFAULT_RETRY_MAX_SECONDS = 30.0
 
 
 class AtlassianError(RuntimeError):
@@ -30,6 +54,92 @@ class ConfluenceError(AtlassianError):
 
 class JiraError(AtlassianError):
     pass
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
+class _FileLock:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._file: Optional[Any] = None
+
+    def __enter__(self) -> "_FileLock":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = self.path.open("a+")
+        if fcntl is not None:
+            fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
+        elif msvcrt is not None:  # pragma: no cover - Windows fallback
+            msvcrt.locking(self._file.fileno(), msvcrt.LK_LOCK, 1)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        if self._file is None:
+            return False
+        if fcntl is not None:
+            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
+        elif msvcrt is not None:  # pragma: no cover - Windows fallback
+            msvcrt.locking(self._file.fileno(), msvcrt.LK_UNLCK, 1)
+        self._file.close()
+        return False
+
+
+def _parse_retry_after(value: Optional[str]) -> Optional[float]:
+    if not value:
+        return None
+    stripped = value.strip()
+    try:
+        return max(0.0, float(stripped))
+    except ValueError:
+        pass
+
+    try:
+        retry_at = email.utils.parsedate_to_datetime(stripped)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, retry_at.timestamp() - time.time())
+
+
+def _read_error_payload(exc: urllib.error.HTTPError) -> tuple[str, Any]:
+    raw = exc.read().decode("utf-8", errors="replace")
+    payload: Any
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        payload = raw
+    message = "API request failed"
+    if isinstance(payload, dict):
+        if payload.get("message"):
+            message = payload["message"]
+        elif payload.get("errorMessages"):
+            message = "; ".join(payload["errorMessages"])
+    return message, payload
 
 
 def validate_storage_html(body_html: str) -> None:
@@ -58,10 +168,138 @@ class BaseAtlassianClient:
     product_name = "Atlassian"
     error_cls = AtlassianError
 
-    def __init__(self, base_url: str, token: str, timeout_seconds: int = 30) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        timeout_seconds: int = 30,
+        *,
+        rate_limit_enabled: Optional[bool] = None,
+        rate_limit_rps: Optional[float] = None,
+        rate_limit_burst: Optional[int] = None,
+        max_retries: Optional[int] = None,
+        retry_base_seconds: Optional[float] = None,
+        retry_max_seconds: Optional[float] = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout_seconds = timeout_seconds
+        self.rate_limit_enabled = (
+            _env_bool("CONJIRA_RATE_LIMIT_ENABLED", True)
+            if rate_limit_enabled is None
+            else rate_limit_enabled
+        )
+        self.rate_limit_rps = (
+            _env_float("CONJIRA_RATE_LIMIT_RPS", DEFAULT_RATE_LIMIT_RPS)
+            if rate_limit_rps is None
+            else rate_limit_rps
+        )
+        self.rate_limit_burst = (
+            _env_int("CONJIRA_RATE_LIMIT_BURST", DEFAULT_RATE_LIMIT_BURST)
+            if rate_limit_burst is None
+            else rate_limit_burst
+        )
+        self.max_retries = (
+            _env_int("CONJIRA_MAX_RETRIES", DEFAULT_MAX_RETRIES)
+            if max_retries is None
+            else max_retries
+        )
+        self.retry_base_seconds = (
+            _env_float("CONJIRA_RETRY_BASE_SECONDS", DEFAULT_RETRY_BASE_SECONDS)
+            if retry_base_seconds is None
+            else retry_base_seconds
+        )
+        self.retry_max_seconds = (
+            _env_float("CONJIRA_RETRY_MAX_SECONDS", DEFAULT_RETRY_MAX_SECONDS)
+            if retry_max_seconds is None
+            else retry_max_seconds
+        )
+        self._rate_limit_state_path = self._build_rate_limit_state_path()
+
+    def _build_rate_limit_state_path(self) -> Path:
+        configured_dir = os.environ.get("CONJIRA_RATE_LIMIT_DIR")
+        base_dir = (
+            Path(configured_dir).expanduser()
+            if configured_dir
+            else Path(tempfile.gettempdir()) / "conjira-cli-rate-limit"
+        )
+        identity = "{0}:{1}:{2}".format(self.product_name, self.base_url, self.token)
+        digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+        return base_dir / "{0}.json".format(digest)
+
+    def _wait_for_rate_limit_slot(self) -> None:
+        if (
+            not self.rate_limit_enabled
+            or self.rate_limit_rps <= 0
+            or self.rate_limit_burst <= 0
+        ):
+            return
+
+        state_path = self._rate_limit_state_path
+        lock_path = state_path.with_suffix(".lock")
+
+        while True:
+            with _FileLock(lock_path):
+                now = time.time()
+                state = self._read_rate_limit_state(state_path)
+                updated_at = float(state.get("updated_at", now))
+                tokens = float(state.get("tokens", self.rate_limit_burst))
+                elapsed = max(0.0, now - updated_at)
+                tokens = min(
+                    float(self.rate_limit_burst),
+                    tokens + (elapsed * self.rate_limit_rps),
+                )
+
+                if tokens >= 1.0:
+                    self._write_rate_limit_state(
+                        state_path,
+                        tokens=tokens - 1.0,
+                        updated_at=now,
+                    )
+                    return
+
+                wait_seconds = (1.0 - tokens) / self.rate_limit_rps
+                self._write_rate_limit_state(
+                    state_path,
+                    tokens=tokens,
+                    updated_at=now,
+                )
+
+            time.sleep(wait_seconds + random.uniform(0.0, 0.05))
+
+    @staticmethod
+    def _read_rate_limit_state(path: Path) -> Dict[str, Any]:
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
+
+    @staticmethod
+    def _write_rate_limit_state(
+        path: Path,
+        *,
+        tokens: float,
+        updated_at: float,
+    ) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = path.with_suffix(".tmp")
+        payload = {
+            "tokens": tokens,
+            "updated_at": updated_at,
+        }
+        tmp_path.write_text(json.dumps(payload), encoding="utf-8")
+        tmp_path.replace(path)
+
+    def _retry_delay_seconds(self, exc: urllib.error.HTTPError, attempt: int) -> float:
+        retry_after = _parse_retry_after(exc.headers.get("Retry-After"))
+        if retry_after is not None:
+            return min(retry_after, self.retry_max_seconds)
+        backoff = self.retry_base_seconds * (2 ** max(0, attempt - 1))
+        jitter = random.uniform(0.0, min(0.5, self.retry_base_seconds))
+        return min(backoff + jitter, self.retry_max_seconds)
+
+    def _should_retry_http_error(self, exc: urllib.error.HTTPError, attempt: int) -> bool:
+        return exc.code == 429 and attempt <= self.max_retries
 
     def request(
         self,
@@ -94,46 +332,44 @@ class BaseAtlassianClient:
         if headers:
             request_headers.update(headers)
 
-        request = urllib.request.Request(
-            url,
-            data=data,
-            headers=request_headers,
-            method=method.upper(),
-        )
+        attempt = 0
+        while True:
+            attempt += 1
+            request = urllib.request.Request(
+                url,
+                data=data,
+                headers=request_headers,
+                method=method.upper(),
+            )
 
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-                raw = response.read().decode("utf-8")
-                if not raw:
-                    return None
-                content_type = response.headers.get("Content-Type", "")
-                if "application/json" in content_type:
-                    return json.loads(raw)
-                stripped = raw.lstrip()
-                if stripped.startswith("{") or stripped.startswith("["):
-                    try:
-                        return json.loads(raw)
-                    except json.JSONDecodeError:
-                        pass
-                return raw
-        except urllib.error.HTTPError as exc:
-            raw = exc.read().decode("utf-8", errors="replace")
-            payload: Any
+            self._wait_for_rate_limit_slot()
             try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                payload = raw
-            message = "{0} API request failed".format(self.product_name)
-            if isinstance(payload, dict):
-                if payload.get("message"):
-                    message = payload["message"]
-                elif payload.get("errorMessages"):
-                    message = "; ".join(payload["errorMessages"])
-            raise self.error_cls(message, status_code=exc.code, payload=payload) from exc
-        except urllib.error.URLError as exc:
-            raise self.error_cls(
-                "Failed to connect to {0}: {1}".format(self.product_name, exc.reason)
-            ) from exc
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                    raw = response.read().decode("utf-8")
+                    if not raw:
+                        return None
+                    content_type = response.headers.get("Content-Type", "")
+                    if "application/json" in content_type:
+                        return json.loads(raw)
+                    stripped = raw.lstrip()
+                    if stripped.startswith("{") or stripped.startswith("["):
+                        try:
+                            return json.loads(raw)
+                        except json.JSONDecodeError:
+                            pass
+                    return raw
+            except urllib.error.HTTPError as exc:
+                if self._should_retry_http_error(exc, attempt):
+                    time.sleep(self._retry_delay_seconds(exc, attempt))
+                    continue
+                message, payload = _read_error_payload(exc)
+                if message == "API request failed":
+                    message = "{0} API request failed".format(self.product_name)
+                raise self.error_cls(message, status_code=exc.code, payload=payload) from exc
+            except urllib.error.URLError as exc:
+                raise self.error_cls(
+                    "Failed to connect to {0}: {1}".format(self.product_name, exc.reason)
+                ) from exc
 
 
 class ConfluenceClient(BaseAtlassianClient):
@@ -332,6 +568,53 @@ class ConfluenceClient(BaseAtlassianClient):
 
         return comments
 
+    def get_footer_comments(
+        self,
+        page_id: str,
+        *,
+        limit: int = 200,
+        start: int = 0,
+    ) -> Dict[str, Any]:
+        query = {
+            "location": "footer",
+            "expand": "body.storage,history,container,ancestors",
+            "limit": limit,
+            "start": start,
+            "depth": "all",
+        }
+        return self.request(
+            "GET",
+            "/rest/api/content/{0}/child/comment".format(page_id),
+            query=query,
+        )
+
+    def list_footer_comments(
+        self,
+        page_id: str,
+        *,
+        limit: int = 200,
+    ) -> list[Dict[str, Any]]:
+        comments: list[Dict[str, Any]] = []
+        start = 0
+
+        while True:
+            result = self.get_footer_comments(
+                page_id,
+                limit=limit,
+                start=start,
+            )
+            batch = result.get("results", []) if isinstance(result, dict) else []
+            if not batch:
+                break
+            comments.extend(batch)
+
+            batch_size = len(batch)
+            if batch_size < limit:
+                break
+            start += batch_size
+
+        return comments
+
     def get_attachments(
         self,
         page_id: str,
@@ -483,6 +766,20 @@ class ConfluenceClient(BaseAtlassianClient):
             page_url=self.webui_url(page) or "",
             raw_comments=comments,
             status_filter=status_filter,
+        )
+
+    def summarize_footer_comments(
+        self,
+        *,
+        page: Dict[str, Any],
+        comments: Iterable[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        return build_footer_comment_summary(
+            base_url=self.base_url,
+            page_id=page.get("id") or "",
+            page_title=page.get("title") or "Untitled",
+            page_url=self.webui_url(page) or "",
+            raw_comments=comments,
         )
 
 

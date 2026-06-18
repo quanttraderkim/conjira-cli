@@ -27,6 +27,7 @@ English version: [README.md](README.md)
 - storage HTML 또는 Markdown으로 Confluence 페이지 생성 및 수정
 - 오래된 Markdown export 검사 및 최신 위키 기준 refresh
 - Confluence 인라인 코멘트 스레드 조회 및 Markdown export
+- Confluence 페이지 하단 일반 코멘트와 답글 조회
 - Confluence 첨부파일 업로드
 - Jira 이슈 조회, JQL 검색, create metadata 조회, 이슈 생성, 댓글 추가
 - `--dry-run` 미리보기 후 `--allow-write`와 allowlist 기반의 쓰기 안전장치
@@ -315,6 +316,12 @@ Confluence 인라인 코멘트 스레드 export:
 conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/work-folder"
 ```
 
+Confluence 페이지 하단 일반 코멘트와 답글 조회:
+
+```bash
+conjira --env-file ./local/agent.env get-footer-comments --page-id 123456
+```
+
 Confluence 페이지 생성 및 수정:
 
 ```bash
@@ -410,6 +417,17 @@ Jira 관련 설정:
 - `JIRA_ALLOWED_PROJECT_KEYS`
 - `JIRA_ALLOWED_ISSUE_KEYS`
 
+공통 rate limit 설정:
+
+- `CONJIRA_RATE_LIMIT_ENABLED`: `false`로 두면 클라이언트 측 호출 제한 비활성화
+- `CONJIRA_RATE_LIMIT_RPS`: 기본값 `4.0`
+- `CONJIRA_RATE_LIMIT_BURST`: 기본값 `8`
+- `CONJIRA_MAX_RETRIES`: 최초 실패 이후 재시도 기본값 `5`
+- `CONJIRA_RETRY_BASE_SECONDS`: 기본값 `1.0`
+- `CONJIRA_RETRY_MAX_SECONDS`: 기본값 `30.0`
+
+`CONFLUENCE_RATE_LIMIT_RPS`, `JIRA_RATE_LIMIT_RPS`처럼 제품별 값을 지정하면 공통 `CONJIRA_*` 값보다 우선 적용됩니다. 호출 제한 상태는 같은 제품, base URL, token을 쓰는 로컬 CLI 프로세스끼리 공유되므로 여러 에이전트 호출도 함께 속도 조절됩니다.
+
 ## 안전 모델
 
 이 CLI는 Confluence 페이지나 Jira 이슈 삭제 명령을 의도적으로 포함하지 않습니다.
@@ -426,7 +444,8 @@ Jira 관련 설정:
 - `403`: 제품 권한과 allowlist 설정 확인
 - `404`: page ID, issue key, 대상 경로가 맞는지와 웹 UI에서 실제로 보이는지 확인
 - `409`: 특히 Confluence 업데이트는 최신 페이지를 다시 읽고 재시도
-- `429`, `5xx`: 잠시 기다렸다가 재시도하고 반복 요청 빈도를 낮추기
+- `429`: CLI가 자동으로 backoff 재시도하고 서버가 `Retry-After`를 주면 해당 값을 우선 사용
+- `5xx`: 잠시 기다렸다가 재시도하고 반복 요청 빈도를 낮추기
 
 ## Export 전략
 

@@ -354,6 +354,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default="all",
     )
 
+    get_footer_comments = subparsers.add_parser(
+        "get-footer-comments",
+        aliases=["get-page-comments"],
+        help="Fetch Confluence page footer comments, including replies",
+    )
+    get_footer_comments.add_argument("--page-id", required=True)
+    get_footer_comments.add_argument("--limit", type=int, default=200)
+
     export_inline_comments_md = subparsers.add_parser(
         "export-inline-comments-md",
         help="Export grouped Confluence inline comments to a Markdown file",
@@ -929,6 +937,12 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         base_url=settings.base_url,
         token=settings.token,
         timeout_seconds=settings.timeout_seconds,
+        rate_limit_enabled=settings.rate_limit_enabled,
+        rate_limit_rps=settings.rate_limit_rps,
+        rate_limit_burst=settings.rate_limit_burst,
+        max_retries=settings.max_retries,
+        retry_base_seconds=settings.retry_base_seconds,
+        retry_max_seconds=settings.retry_max_seconds,
     )
 
     if args.command == "auth-check":
@@ -1079,6 +1093,16 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             page=page,
             comments=comments,
             status_filter=args.status,
+        )
+    if args.command in {"get-footer-comments", "get-page-comments"}:
+        page = client.get_page(args.page_id, expand="version,space")
+        comments = client.list_footer_comments(
+            args.page_id,
+            limit=args.limit,
+        )
+        return client.summarize_footer_comments(
+            page=page,
+            comments=comments,
         )
     if args.command == "export-inline-comments-md":
         page = client.get_page(args.page_id, expand="version,space")
@@ -1382,6 +1406,12 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
         base_url=settings.base_url,
         token=settings.token,
         timeout_seconds=settings.timeout_seconds,
+        rate_limit_enabled=settings.rate_limit_enabled,
+        rate_limit_rps=settings.rate_limit_rps,
+        rate_limit_burst=settings.rate_limit_burst,
+        max_retries=settings.max_retries,
+        retry_base_seconds=settings.retry_base_seconds,
+        retry_max_seconds=settings.retry_max_seconds,
     )
 
     if args.command == "jira-auth-check":

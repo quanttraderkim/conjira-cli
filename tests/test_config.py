@@ -34,7 +34,12 @@ class ConfigTests(unittest.TestCase):
                 "CONFLUENCE_TIMEOUT_SECONDS=45\n"
                 "CONFLUENCE_EXPORT_DEFAULT_DIR=/vault/inbox\n"
                 "CONFLUENCE_EXPORT_STAGING_DIR=/tmp/staging\n"
-                "CONFLUENCE_MERMAID_MACRO_NAME=mermaid-macro\n",
+                "CONFLUENCE_MERMAID_MACRO_NAME=mermaid-macro\n"
+                "CONJIRA_RATE_LIMIT_RPS=3.5\n"
+                "CONJIRA_RATE_LIMIT_BURST=6\n"
+                "CONJIRA_MAX_RETRIES=4\n"
+                "CONJIRA_RETRY_BASE_SECONDS=0.5\n"
+                "CONJIRA_RETRY_MAX_SECONDS=12\n",
                 encoding="utf-8",
             )
             settings = build_settings(
@@ -53,6 +58,11 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(settings.export_default_dir, "/vault/inbox")
         self.assertEqual(settings.export_staging_dir, "/tmp/staging")
         self.assertEqual(settings.mermaid_macro_name, "mermaid-macro")
+        self.assertEqual(settings.rate_limit_rps, 3.5)
+        self.assertEqual(settings.rate_limit_burst, 6)
+        self.assertEqual(settings.max_retries, 4)
+        self.assertEqual(settings.retry_base_seconds, 0.5)
+        self.assertEqual(settings.retry_max_seconds, 12)
 
     def test_build_settings_uses_token_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

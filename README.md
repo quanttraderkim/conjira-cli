@@ -27,6 +27,7 @@ For report-style pages, it can also preserve a small set of Confluence-native pr
 - create or update Confluence pages from either storage HTML or Markdown
 - detect stale Markdown exports and refresh them from the live page
 - fetch and export grouped Confluence inline comment threads
+- fetch Confluence page footer comments and replies
 - upload attachments to Confluence pages
 - read Jira issues, search with JQL, inspect create metadata, create issues, and add comments
 - preview writes with `--dry-run`, then enforce them with `--allow-write` plus optional allowlists
@@ -315,6 +316,12 @@ Export grouped inline comment threads:
 conjira --env-file ./local/agent.env export-inline-comments-md --page-id 123456 --status open --output-dir "/path/to/work-folder"
 ```
 
+Read page footer comments and replies:
+
+```bash
+conjira --env-file ./local/agent.env get-footer-comments --page-id 123456
+```
+
 Create or update a Confluence page:
 
 ```bash
@@ -410,6 +417,17 @@ Jira settings:
 - `JIRA_ALLOWED_PROJECT_KEYS`
 - `JIRA_ALLOWED_ISSUE_KEYS`
 
+Shared rate-limit settings:
+
+- `CONJIRA_RATE_LIMIT_ENABLED`: set to `false` to disable client-side throttling
+- `CONJIRA_RATE_LIMIT_RPS`: default `4.0`
+- `CONJIRA_RATE_LIMIT_BURST`: default `8`
+- `CONJIRA_MAX_RETRIES`: default `5` retries after the first failed request
+- `CONJIRA_RETRY_BASE_SECONDS`: default `1.0`
+- `CONJIRA_RETRY_MAX_SECONDS`: default `30.0`
+
+Product-specific overrides such as `CONFLUENCE_RATE_LIMIT_RPS` and `JIRA_RATE_LIMIT_RPS` take precedence over the shared `CONJIRA_*` values. The throttle state is shared across local CLI processes for the same product, base URL, and token, so separate agent calls are paced together.
+
 ## Safety model
 
 This CLI intentionally does not implement delete commands for Confluence pages or Jira issues.
@@ -426,7 +444,8 @@ When the CLI hits a common API failure, it now returns a `guidance` field alongs
 - `403`: check product permissions and any configured allowlists
 - `404`: check the page ID, issue key, or target path and confirm the PAT owner can see it in the web UI
 - `409`: refresh live content and retry, especially for Confluence updates after concurrent edits
-- `429` and `5xx`: retry after a short delay and reduce request volume if you are looping
+- `429`: the CLI automatically retries with backoff and honors `Retry-After` when the server sends it
+- `5xx`: retry after a short delay and reduce request volume if you are looping
 
 ## Export strategy
 
