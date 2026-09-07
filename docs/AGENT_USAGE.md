@@ -207,7 +207,7 @@ Preview a Jira write before using `--allow-write`:
 - This project does not implement delete commands.
 - Write commands require `--allow-write`, or `--dry-run` when you only want a preview.
 - If `CONFLUENCE_ALLOWED_*` or `JIRA_ALLOWED_*` values are set, treat them as hard safety boundaries rather than suggestions.
-- Markdown upload is a best-effort conversion to Confluence storage HTML. Prefer it for common text-first pages, not for macro-heavy round-trips.
+- Markdown upload is a best-effort conversion to Confluence storage HTML. Prefer it for common text-first pages, not for macro-heavy round-trips. Code blocks and ```` ```math ```` formulas do round-trip (they map to the `code` and `mathblock` macros), and partial edits keep every macro body on the page intact.
 - `--body-file` and `--append-file` are for storage HTML files. Use `--body-markdown-file` or `--append-markdown-file` for Markdown inputs.
 - `replace-section` currently works best on text-first pages with clear heading structure. It intentionally fails when the target heading is missing or ambiguous.
 - `insert-after-heading` uses the same heading matching rule as `replace-section`, so it should target a heading that exists exactly once on the page.

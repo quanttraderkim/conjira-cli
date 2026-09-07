@@ -298,3 +298,31 @@ class MarkdownImportTests(unittest.TestCase):
         # Whole cell goes through as raw HTML; trailing markdown is NOT rendered.
         self.assertIn("<ul><li>x</li></ul> trailing [link](http://example.com)", result)
         self.assertNotIn('<a href="http://example.com">', result)
+
+
+class MathFenceImportTests(unittest.TestCase):
+    def test_math_fence_becomes_mathblock_macro(self) -> None:
+        result = markdown_to_storage_html("```math\n\\text{Credit} = a \\times E\n```\n")
+
+        self.assertIn(
+            '<ac:structured-macro ac:name="mathblock" ac:schema-version="1">',
+            result,
+        )
+        self.assertIn(
+            "<ac:plain-text-body><![CDATA[\\text{Credit} = a \\times E]]></ac:plain-text-body>",
+            result,
+        )
+        self.assertNotIn('ac:name="code"', result)
+
+    def test_indented_math_fence_inside_list_item_becomes_nested_mathblock(self) -> None:
+        markdown = "- Ledger\n  ```math\n  x = 1\n  ```\n- Next item\n"
+
+        result = markdown_to_storage_html(markdown)
+
+        self.assertIn(
+            "<li>Ledger<ac:structured-macro ac:name=\"mathblock\" ac:schema-version=\"1\">"
+            "<ac:plain-text-body><![CDATA[x = 1]]></ac:plain-text-body></ac:structured-macro></li>",
+            result,
+        )
+        self.assertIn("<li>Next item</li>", result)
+        self.assertNotIn("```", result)

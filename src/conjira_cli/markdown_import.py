@@ -126,7 +126,7 @@ def _parse_blocks(
             continue
 
         if _LIST_ITEM_RE.match(line):
-            block, i = _parse_list(lines, i, current_indent)
+            block, i = _parse_list(lines, i, current_indent, mermaid_macro_name=mermaid_macro_name)
             parts.append(block)
             continue
 
@@ -175,7 +175,9 @@ def _render_fenced_block(
     mermaid_macro_name: Optional[str],
 ) -> str:
     if mermaid_macro_name and language.lower() == "mermaid":
-        return _render_mermaid_macro(code, mermaid_macro_name)
+        return _render_plain_text_macro(code, mermaid_macro_name)
+    if language.lower() == "math":
+        return _render_plain_text_macro(code, "mathblock")
     return _render_code_macro(code, language)
 
 
@@ -191,7 +193,7 @@ def _render_code_macro(code: str, language: str) -> str:
     ).format(safe_language, cdata_code)
 
 
-def _render_mermaid_macro(code: str, macro_name: str) -> str:
+def _render_plain_text_macro(code: str, macro_name: str) -> str:
     safe_macro_name = html.escape(macro_name, quote=True)
     cdata_code = code.replace("]]>", "]]]]><![CDATA[>")
     return (
@@ -282,7 +284,13 @@ def _render_callout_macro(*, macro_name: str, title: str, body_html: str) -> str
     )
 
 
-def _parse_list(lines: list[str], start: int, indent: int) -> tuple[str, int]:
+def _parse_list(
+    lines: list[str],
+    start: int,
+    indent: int,
+    *,
+    mermaid_macro_name: Optional[str] = None,
+) -> tuple[str, int]:
     first_match = _LIST_ITEM_RE.match(lines[start])
     if first_match is None:
         raise ValueError("List parsing requires a list item")
@@ -302,7 +310,7 @@ def _parse_list(lines: list[str], start: int, indent: int) -> tuple[str, int]:
         if current_indent < indent or current_ordered != ordered:
             break
         if current_indent > indent:
-            nested, i = _parse_list(lines, i, current_indent)
+            nested, i = _parse_list(lines, i, current_indent, mermaid_macro_name=mermaid_macro_name)
             if items:
                 items[-1] = items[-1].replace("</li>", nested + "</li>", 1)
             continue
@@ -326,13 +334,22 @@ def _parse_list(lines: list[str], start: int, indent: int) -> tuple[str, int]:
                 if nested_indent == indent and nested_ordered == ordered:
                     break
                 if nested_indent > indent:
-                    nested_html, i = _parse_list(lines, i, nested_indent)
+                    nested_html, i = _parse_list(lines, i, nested_indent, mermaid_macro_name=mermaid_macro_name)
                     content_parts.append(nested_html)
                     continue
                 if nested_indent < indent:
                     break
 
             continuation_indent = _leading_spaces(next_line)
+            if continuation_indent > indent and next_line.strip().startswith("```"):
+                block_html, i = _parse_nested_fenced_code(
+                    lines,
+                    i,
+                    fence_indent=continuation_indent,
+                    mermaid_macro_name=mermaid_macro_name,
+                )
+                content_parts.append(block_html)
+                continue
             if continuation_indent > indent:
                 content_parts.append(" " + _render_inline(next_line.strip()))
                 i += 1
@@ -342,6 +359,27 @@ def _parse_list(lines: list[str], start: int, indent: int) -> tuple[str, int]:
         items.append("<li>{0}</li>".format("".join(content_parts).strip()))
 
     return "<{0}>{1}</{0}>".format(tag, "".join(items)), i
+
+
+def _parse_nested_fenced_code(
+    lines: list[str],
+    start: int,
+    *,
+    fence_indent: int,
+    mermaid_macro_name: Optional[str],
+) -> tuple[str, int]:
+    """Parse a fenced block indented under a list item, dedenting it by the fence indent."""
+    fence = lines[start].strip()[:3]
+    dedented: list[str] = []
+    i = start
+    while i < len(lines):
+        line = lines[i]
+        dedented.append(line[fence_indent:] if line[:fence_indent].strip() == "" else line.lstrip())
+        i += 1
+        if i - 1 > start and line.strip().startswith(fence):
+            break
+    block_html, _ = _parse_fenced_code(dedented, 0, mermaid_macro_name=mermaid_macro_name)
+    return block_html, i
 
 
 def _parse_table(lines: list[str], start: int) -> tuple[str, int]:
