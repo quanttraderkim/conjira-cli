@@ -161,7 +161,7 @@ class MarkdownExportTests(unittest.TestCase):
 
         self.assertIn("```mermaid\ngraph TD\nA-->B\n```", result)
 
-    def test_mermaid_macro_is_ignored_without_config(self) -> None:
+    def test_mermaid_macro_keeps_source_as_plain_fence_without_config(self) -> None:
         exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
         html = (
             '<ac:structured-macro ac:name="mermaid-macro" ac:schema-version="1">'
@@ -171,7 +171,7 @@ class MarkdownExportTests(unittest.TestCase):
 
         result = exporter.convert_fragment(html)
 
-        self.assertEqual(result.strip(), "")
+        self.assertEqual(result.strip(), "```\ngraph TD\nA-->B\n```")
 
     def test_callout_macro_renders_as_markdown_callout(self) -> None:
         exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="123")
@@ -295,3 +295,141 @@ class MarkdownExportTests(unittest.TestCase):
         for line in result.splitlines():
             if "Review" in line and line.strip().startswith("|"):
                 self.assertIn("\\|", line, "Pipe in list item should be escaped")
+
+
+class PlainTextMacroExportTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.exporter = MarkdownExporter(base_url="https://confluence.example.com", page_id="12345")
+
+    def test_code_macro_renders_as_fenced_block_with_language(self) -> None:
+        html = (
+            "<h2>Formula</h2>"
+            '<ac:structured-macro ac:name="code" ac:schema-version="1">'
+            '<ac:parameter ac:name="language">text</ac:parameter>'
+            '<ac:parameter ac:name="theme">Default</ac:parameter>'
+            "<ac:plain-text-body><![CDATA[Credit = Cost × E\n  + InfraCredit]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+        )
+
+        result = self.exporter.convert_fragment(html)
+
+        self.assertIn("## Formula", result)
+        self.assertIn("```text\nCredit = Cost × E\n  + InfraCredit\n```", result)
+        self.assertNotIn("Default", result)
+
+    def test_code_macro_without_language_renders_as_bare_fence(self) -> None:
+        for language_xml in ("", '<ac:parameter ac:name="language">none</ac:parameter>'):
+            html = (
+                '<ac:structured-macro ac:name="code" ac:schema-version="1">'
+                + language_xml
+                + "<ac:plain-text-body><![CDATA[plain body]]></ac:plain-text-body>"
+                "</ac:structured-macro>"
+            )
+
+            result = self.exporter.convert_fragment(html)
+
+            self.assertIn("```\nplain body\n```", result)
+            self.assertNotIn("```none", result)
+
+    def test_mathblock_macro_renders_as_math_fence_with_latex_verbatim(self) -> None:
+        html = (
+            '<ac:structured-macro ac:name="mathblock" ac:schema-version="1">'
+            '<ac:parameter ac:name="alignment">left</ac:parameter>'
+            "<ac:plain-text-body><![CDATA[\\text{Credit} = \\sum_{i=1}^{N} a_i \\times E]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+        )
+
+        result = self.exporter.convert_fragment(html)
+
+        self.assertIn("```math\n\\text{Credit} = \\sum_{i=1}^{N} a_i \\times E\n```", result)
+        self.assertNotIn("left", result)
+
+    def test_unknown_plain_text_macro_renders_as_plain_fence_but_rich_macros_keep_children(self) -> None:
+        html = (
+            '<ac:structured-macro ac:name="noformat" ac:schema-version="1">'
+            "<ac:plain-text-body><![CDATA[raw  text]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+            '<ac:structured-macro ac:name="panel" ac:schema-version="1">'
+            "<ac:rich-text-body><p>Panel text</p></ac:rich-text-body>"
+            "</ac:structured-macro>"
+        )
+
+        result = self.exporter.convert_fragment(html)
+
+        self.assertIn("```\nraw  text\n```", result)
+        self.assertIn("Panel text", result)
+        self.assertNotIn("```\nPanel text", result)
+
+    def test_code_and_math_macros_survive_export_import_round_trip(self) -> None:
+        from conjira_cli.markdown_import import markdown_to_storage_html
+
+        html = (
+            "<h2>Formula</h2>"
+            '<ac:structured-macro ac:name="code" ac:schema-version="1">'
+            '<ac:parameter ac:name="language">text</ac:parameter>'
+            "<ac:plain-text-body><![CDATA[Credit = Cost × E]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+            '<ac:structured-macro ac:name="mathblock" ac:schema-version="1">'
+            "<ac:plain-text-body><![CDATA[\\text{Credit} = \\text{Cost} \\times E]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+        )
+
+        round_tripped = markdown_to_storage_html(self.exporter.convert_fragment(html))
+
+        self.assertIn('<ac:structured-macro ac:name="code" ac:schema-version="1">', round_tripped)
+        self.assertIn('<ac:parameter ac:name="language">text</ac:parameter>', round_tripped)
+        self.assertIn("<![CDATA[Credit = Cost × E]]>", round_tripped)
+        self.assertIn('<ac:structured-macro ac:name="mathblock" ac:schema-version="1">', round_tripped)
+        self.assertIn("<![CDATA[\\text{Credit} = \\text{Cost} \\times E]]>", round_tripped)
+
+    def test_plain_text_macro_inside_list_item_renders_as_nested_fence(self) -> None:
+        html = (
+            "<ul><li>Ledger"
+            '<ac:structured-macro ac:name="mathblock" ac:schema-version="1">'
+            "<ac:plain-text-body><![CDATA[\\text{Ledger} = \\text{Credit}]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+            "</li><li>Next item</li></ul>"
+        )
+
+        result = self.exporter.convert_fragment(html)
+
+        self.assertIn("- Ledger\n", result)
+        self.assertIn("```math\n  \\text{Ledger} = \\text{Credit}\n  ```", result)
+        self.assertIn("- Next item", result)
+
+    def test_math_macro_inside_list_item_survives_round_trip(self) -> None:
+        from conjira_cli.markdown_import import markdown_to_storage_html
+
+        html = (
+            "<ul><li>Ledger"
+            '<ac:structured-macro ac:name="mathblock" ac:schema-version="1">'
+            "<ac:plain-text-body><![CDATA[\\text{Ledger} = \\text{Credit}]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+            "</li><li>Next item</li></ul>"
+        )
+
+        round_tripped = markdown_to_storage_html(self.exporter.convert_fragment(html))
+
+        self.assertIn(
+            '<li>Ledger<ac:structured-macro ac:name="mathblock" ac:schema-version="1">'
+            "<ac:plain-text-body><![CDATA[\\text{Ledger} = \\text{Credit}]]></ac:plain-text-body>"
+            "</ac:structured-macro></li>",
+            round_tripped,
+        )
+        self.assertIn("<li>Next item</li>", round_tripped)
+
+    def test_plain_text_macro_wrapped_in_paragraph_renders_as_fence(self) -> None:
+        html = (
+            "<p>Before"
+            '<ac:structured-macro ac:name="code" ac:schema-version="1">'
+            '<ac:parameter ac:name="language">text</ac:parameter>'
+            "<ac:plain-text-body><![CDATA[x = 1]]></ac:plain-text-body>"
+            "</ac:structured-macro>"
+            "After</p>"
+        )
+
+        result = self.exporter.convert_fragment(html)
+
+        self.assertIn("Before", result)
+        self.assertIn("```text\nx = 1\n```", result)
+        self.assertIn("After", result)

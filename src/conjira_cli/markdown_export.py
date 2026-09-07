@@ -212,11 +212,17 @@ class MarkdownExporter:
             if macro_name == "toc":
                 return ""
             if self.mermaid_macro_name and macro_name == self.mermaid_macro_name:
-                return self._render_mermaid_macro(elem)
+                return self._render_fenced_macro(elem, "mermaid")
             if macro_name == "status":
                 return self._render_status_token(elem) + "\n\n"
             if macro_name in _CALLOUT_MACRO_NAMES:
                 return self._render_callout_macro(elem, macro_name)
+            if macro_name == "code":
+                return self._render_fenced_macro(elem, self._extract_macro_parameter(elem, "language"))
+            if macro_name == "mathblock":
+                return self._render_fenced_macro(elem, "math")
+            if self._has_only_plain_text_body(elem):
+                return self._render_fenced_macro(elem, "")
             return self._render_children(elem, indent=indent)
         if name in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             level = int(name[1])
@@ -295,6 +301,8 @@ class MarkdownExporter:
             macro_name = elem.attrib.get("{urn:ac}name")
             if macro_name == "status":
                 return self._render_status_token(elem)
+            if self._is_fenced_macro(elem):
+                return "\n" + self._render_block(elem, indent=0).strip() + "\n"
             return ""
         if name in {"ul", "ol", "table"}:
             return "\n" + self._render_block(elem, indent=1).strip() + "\n"
@@ -317,7 +325,7 @@ class MarkdownExporter:
 
             for grandchild in list(child):
                 grandchild_name = _local_name(grandchild.tag)
-                if grandchild_name in {"ul", "ol", "table"}:
+                if grandchild_name in {"ul", "ol", "table"} or self._is_fenced_macro(grandchild):
                     nested_text = self._render_block(grandchild, indent=indent + 1).rstrip()
                     if not nested_text:
                         continue
@@ -512,9 +520,25 @@ class MarkdownExporter:
         )
         return f"![{attachment_name}]({url})\n\n"
 
-    def _render_mermaid_macro(self, elem: ET.Element) -> str:
+    def _is_fenced_macro(self, elem: ET.Element) -> bool:
+        if _local_name(elem.tag) != "structured-macro":
+            return False
+        macro_name = elem.attrib.get("{urn:ac}name")
+        if macro_name in {"code", "mathblock"}:
+            return True
+        if self.mermaid_macro_name and macro_name == self.mermaid_macro_name:
+            return True
+        return self._has_only_plain_text_body(elem)
+
+    @staticmethod
+    def _has_only_plain_text_body(elem: ET.Element) -> bool:
+        child_names = {_local_name(child.tag) for child in list(elem)}
+        return "plain-text-body" in child_names and "rich-text-body" not in child_names
+
+    def _render_fenced_macro(self, elem: ET.Element, language: str) -> str:
         text = self._extract_macro_plain_text_body(elem).strip("\n")
-        return f"```mermaid\n{text}\n```\n\n" if text else "```mermaid\n```\n\n"
+        fence_language = "" if language.strip().lower() in {"", "none"} else language.strip()
+        return f"```{fence_language}\n{text}\n```\n\n"
 
     def _render_callout_macro(self, elem: ET.Element, macro_name: str) -> str:
         title = self._extract_macro_parameter(elem, "title")
