@@ -4,9 +4,9 @@
 
 Unofficial, agent-friendly CLI for self-hosted Confluence and Jira.
 
-Korean version: [README.ko.md](README.ko.md)
+Korean version: [README.ko.md](https://github.com/quanttraderkim/conjira-cli/blob/main/README.ko.md)
 
-Release notes for maintainers: [docs/RELEASING.md](docs/RELEASING.md)
+Release notes for maintainers: [docs/RELEASING.md](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/RELEASING.md)
 
 `conjira-cli` is a small Python command-line tool for teams that run Confluence and Jira on their own infrastructure and want a practical local interface for scripts, coding agents, and Markdown workflows. It wraps standard Atlassian REST APIs behind a simple CLI, supports safer local credential handling, and adds guardrails for write operations.
 
@@ -14,7 +14,7 @@ You do not need to be a Python developer to get value from this repository. If y
 
 ## New in 0.3.0
 
-MCP is now available through `pipx install 'conjira-cli[mcp]'` and the `conjira-mcp` entrypoint (Python 3.10+). All 31 canonical CLI commands are exposed as typed MCP tools, with stdio and authenticated HTTP transports. See [MCP setup and examples](docs/MCP.md), [release notes and migration](docs/CHANGELOG.md), and `conjira --version` / `conjira doctor`.
+MCP is now available through `pipx install 'conjira-cli[mcp]'` and the `conjira-mcp` entrypoint (Python 3.10+). All 31 canonical CLI commands are exposed as typed MCP tools, with stdio and authenticated HTTP transports. See [MCP setup and examples](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/MCP.md), [release notes and migration](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/CHANGELOG.md), and `conjira --version` / `conjira doctor`.
 
 This release adds heading discovery, exact edit diffs and version guards, parallel batch reads, complete paginated searches, Jira field updates and status transitions. It also fixes nine reviewed correctness/safety problems and protects local exports with page identity, change detection, and backups.
 
@@ -467,7 +467,7 @@ Use `--body-file` and `--append-file` only for storage HTML files. If your sourc
 
 ## Agent usage
 
-If another local coding agent needs to use this project, point it to [docs/AGENT_USAGE.md](docs/AGENT_USAGE.md). That document is written for tools that can run shell commands on the same machine.
+If another local coding agent needs to use this project, point it to [docs/AGENT_USAGE.md](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/AGENT_USAGE.md). That document is written for tools that can run shell commands on the same machine.
 
 ## License
 
