@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "conjira-cli"
-version = "0.2.7"
+version = "0.3.0"
 description = "Unofficial agent-friendly CLI for self-hosted Confluence and Jira"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -35,14 +35,19 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Utilities",
 ]
 dependencies = []
 
+[project.optional-dependencies]
+mcp = ["mcp>=2.2,<3; python_version >= '3.10'"]
+
 [project.scripts]
 conjira = "conjira_cli.cli:main"
 conjira-cli = "conjira_cli.cli:main"
+conjira-mcp = "conjira_cli.mcp_server:main"
 conjira-setup-macos = "conjira_cli.setup_macos:main"
 
 [project.urls]
@@ -55,3 +60,9 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E9", "F"]

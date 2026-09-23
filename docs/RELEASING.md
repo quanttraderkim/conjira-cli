@@ -24,7 +24,7 @@ Update both of these files:
 
 ### 3. Run the publish workflow
 
-Open the GitHub Actions tab and run `Publish to PyPI` manually. The workflow builds the package, runs `twine check`, and publishes with OIDC Trusted Publishing.
+Open the GitHub Actions tab and run `Publish to PyPI` manually. The workflow first runs the reusable Linux/macOS/Windows CI matrix, then builds the package, runs `twine check`, installs and tests the wheel in a fresh environment, and publishes with OIDC Trusted Publishing. Check the installed PyPI version and run an MCP connection smoke test after publication. See `docs/CHANGELOG.md` and `docs/MCP.md` for release and compatibility notes.
 
 ## Local fallback: Twine upload
 

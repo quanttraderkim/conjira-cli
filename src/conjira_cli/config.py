@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import math
+import urllib.parse
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,12 +53,12 @@ def load_env_file(path: Path) -> Dict[str, str]:
     if not path.exists():
         raise ConfigError("Env file not found: {0}".format(path))
 
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
         if "=" not in line:
-            raise ConfigError("Invalid env line: {0}".format(raw_line))
+            raise ConfigError("Invalid env line at line {0}; expected KEY=VALUE.".format(line_number))
         key, value = line.split("=", 1)
         values[key.strip()] = _strip_quotes(value.strip())
     return values
@@ -89,7 +91,7 @@ def _optional_float(value: Optional[str]) -> Optional[float]:
     if value is None or not value.strip():
         return None
     parsed = float(value)
-    return parsed if parsed > 0 else None
+    return parsed if math.isfinite(parsed) and parsed > 0 else None
 
 
 def _optional_int(value: Optional[str]) -> Optional[int]:
@@ -141,7 +143,7 @@ def _rate_limit_settings(env: Dict[str, str], *, prefix: str) -> Dict[str, objec
 def _read_token_from_file(path: Optional[str]) -> Optional[str]:
     if not path:
         return None
-    return Path(path).read_text(encoding="utf-8").strip()
+    return Path(path).expanduser().read_text(encoding="utf-8").strip()
 
 
 def _read_token_from_keychain(
@@ -227,6 +229,11 @@ def _resolve_common_settings(
             )
         )
 
+    parsed_url = urllib.parse.urlsplit(resolved_base_url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname or parsed_url.username or parsed_url.password or parsed_url.query or parsed_url.fragment:
+        raise ConfigError("Base URL must be an HTTP(S) product root without credentials, query, or fragment.")
+    if resolved_timeout <= 0:
+        raise ConfigError("Timeout must be positive.")
     return env, resolved_base_url.rstrip("/"), resolved_token, resolved_timeout
 
 

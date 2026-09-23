@@ -3,6 +3,7 @@ from __future__ import annotations
 import email.utils
 import hashlib
 import json
+import math
 import os
 import random
 import tempfile
@@ -56,6 +57,33 @@ class JiraError(AtlassianError):
     pass
 
 
+def url_origin(url: str) -> tuple[str, str, int]:
+    parsed = urllib.parse.urlsplit(url)
+    return parsed.scheme.lower(), (parsed.hostname or "").lower(), parsed.port or (443 if parsed.scheme == "https" else 80)
+
+
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if url_origin(req.full_url) != url_origin(newurl):
+            fp.close()
+            raise urllib.error.URLError("Authenticated cross-origin redirect blocked; configure the final product base URL.")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def build_issue_fields(*, project_key: str, summary: str, issue_type_name: str,
+                       description: Optional[str], extra_fields: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if extra_fields is not None and not isinstance(extra_fields, dict):
+        raise JiraError("Additional fields must be a JSON object.")
+    reserved = {"project", "summary", "issuetype", "description"}
+    if extra_fields and reserved.intersection(extra_fields):
+        raise JiraError("Additional fields cannot override project, summary, issuetype, or description; use their named arguments.")
+    fields: Dict[str, Any] = {"project": {"key": project_key}, "summary": summary, "issuetype": {"name": issue_type_name}}
+    if description is not None:
+        fields["description"] = description
+    fields.update(extra_fields or {})
+    return fields
+
+
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -71,7 +99,7 @@ def _env_float(name: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         return default
-    return value if value > 0 else default
+    return value if math.isfinite(value) and value > 0 else default
 
 
 def _env_int(name: str, default: int) -> int:
@@ -96,6 +124,7 @@ class _FileLock:
         if fcntl is not None:
             fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
         elif msvcrt is not None:  # pragma: no cover - Windows fallback
+            self._file.seek(0)
             msvcrt.locking(self._file.fileno(), msvcrt.LK_LOCK, 1)
         return self
 
@@ -105,6 +134,7 @@ class _FileLock:
         if fcntl is not None:
             fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
         elif msvcrt is not None:  # pragma: no cover - Windows fallback
+            self._file.seek(0)
             msvcrt.locking(self._file.fileno(), msvcrt.LK_UNLCK, 1)
         self._file.close()
         return False
@@ -115,7 +145,8 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
         return None
     stripped = value.strip()
     try:
-        return max(0.0, float(stripped))
+        seconds = float(stripped)
+        return max(0.0, seconds) if math.isfinite(seconds) else None
     except ValueError:
         pass
 
@@ -216,6 +247,9 @@ class BaseAtlassianClient:
         )
         self._rate_limit_state_path = self._build_rate_limit_state_path()
 
+    def _open(self, request):
+        return urllib.request.build_opener(SafeRedirectHandler()).open(request, timeout=self.timeout_seconds)
+
     def _build_rate_limit_state_path(self) -> Path:
         configured_dir = os.environ.get("CONJIRA_RATE_LIMIT_DIR")
         base_dir = (
@@ -270,8 +304,11 @@ class BaseAtlassianClient:
     @staticmethod
     def _read_rate_limit_state(path: Path) -> Dict[str, Any]:
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or any(not math.isfinite(float(data[key])) for key in ("tokens", "updated_at")):
+                return {}
+            return data
+        except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError, TypeError, KeyError):
             return {}
 
     @staticmethod
@@ -293,13 +330,13 @@ class BaseAtlassianClient:
     def _retry_delay_seconds(self, exc: urllib.error.HTTPError, attempt: int) -> float:
         retry_after = _parse_retry_after(exc.headers.get("Retry-After"))
         if retry_after is not None:
-            return min(retry_after, self.retry_max_seconds)
+            return retry_after
         backoff = self.retry_base_seconds * (2 ** max(0, attempt - 1))
         jitter = random.uniform(0.0, min(0.5, self.retry_base_seconds))
         return min(backoff + jitter, self.retry_max_seconds)
 
-    def _should_retry_http_error(self, exc: urllib.error.HTTPError, attempt: int) -> bool:
-        return exc.code == 429 and attempt <= self.max_retries
+    def _should_retry_http_error(self, exc: urllib.error.HTTPError, attempt: int, method: str = "GET") -> bool:
+        return attempt <= self.max_retries and (exc.code == 429 or (method.upper() in {"GET", "HEAD"} and exc.code in {502, 503, 504}))
 
     def request(
         self,
@@ -344,7 +381,7 @@ class BaseAtlassianClient:
 
             self._wait_for_rate_limit_slot()
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                with self._open(request) as response:
                     raw = response.read().decode("utf-8")
                     if not raw:
                         return None
@@ -359,10 +396,21 @@ class BaseAtlassianClient:
                             pass
                     return raw
             except urllib.error.HTTPError as exc:
-                if self._should_retry_http_error(exc, attempt):
-                    time.sleep(self._retry_delay_seconds(exc, attempt))
+                if self._should_retry_http_error(exc, attempt, method):
+                    delay = self._retry_delay_seconds(exc, attempt)
+                    exc.close()
+                    time.sleep(delay)
                     continue
                 message, payload = _read_error_payload(exc)
+                def redact(value):
+                    if isinstance(value, str):
+                        return value.replace(self.token, "[REDACTED]") if self.token else value
+                    if isinstance(value, list):
+                        return [redact(item) for item in value]
+                    if isinstance(value, dict):
+                        return {key: "[REDACTED]" if key.lower() in {"authorization", "token", "password"} else redact(item) for key, item in value.items()}
+                    return value
+                message, payload = redact(message), redact(payload)
                 if message == "API request failed":
                     message = "{0} API request failed".format(self.product_name)
                 raise self.error_cls(message, status_code=exc.code, payload=payload) from exc
@@ -371,20 +419,41 @@ class BaseAtlassianClient:
                     "Failed to connect to {0}: {1}".format(self.product_name, exc.reason)
                 ) from exc
 
+    def paginate(self, path: str, *, query: Dict[str, Any], first: Optional[Dict[str, Any]] = None) -> list[Dict[str, Any]]:
+        """Follow server pagination, accepting only links inside this installation."""
+        result = first if first is not None else self.request("GET", path, query=query)
+        items: list[Dict[str, Any]] = []
+        seen: set[str] = set()
+        while True:
+            if not isinstance(result, dict) or not isinstance(result.get("results"), list):
+                raise self.error_cls("Expected a paginated JSON response; check the base URL and authentication.")
+            items.extend(result["results"])
+            next_link = (result.get("_links") or {}).get("next")
+            if not next_link:
+                break
+            absolute = urllib.parse.urljoin(self.base_url + path, next_link)
+            target = urllib.parse.urlsplit(absolute)
+            base_path = urllib.parse.urlsplit(self.base_url).path.rstrip("/")
+            if url_origin(absolute) != url_origin(self.base_url) or not target.path.startswith(base_path + "/rest/"):
+                raise self.error_cls("Pagination link points outside the configured installation.")
+            if absolute in seen:
+                raise self.error_cls("Server returned a repeated pagination link.")
+            seen.add(absolute)
+            suffix = target.path[len(base_path):] + ("?" + target.query if target.query else "")
+            result = self.request("GET", suffix)
+        return items
+
 
 class ConfluenceClient(BaseAtlassianClient):
     product_name = "Confluence"
     error_cls = ConfluenceError
 
     def auth_check(self) -> Dict[str, Any]:
-        data = self.request("GET", "/rest/api/space", query={"limit": 1})
-        results = data.get("results", []) if isinstance(data, dict) else []
-        return {
-            "base_url": self.base_url,
-            "authenticated": True,
-            "space_count_sample": len(results),
-            "first_space_key": results[0].get("key") if results else None,
-        }
+        user = self.request("GET", "/rest/api/user/current")
+        if not isinstance(user, dict) or user.get("type") == "anonymous" or not (user.get("username") or user.get("userKey") or user.get("accountId")):
+            raise self.error_cls("Authentication check did not return an authenticated user.")
+        return {"base_url": self.base_url, "authenticated": True,
+                "username": user.get("username"), "display_name": user.get("displayName")}
 
     def get_page(self, page_id: str, expand: Optional[str] = None) -> Dict[str, Any]:
         query = {"expand": expand} if expand else None
@@ -409,22 +478,31 @@ class ConfluenceClient(BaseAtlassianClient):
         *,
         limit: int = 200,
     ) -> list[Dict[str, Any]]:
-        pages: list[Dict[str, Any]] = []
-        start = 0
+        if limit <= 0:
+            raise self.error_cls("limit must be positive")
+        first = self.get_child_pages(page_id, limit=limit, start=0)
+        if "_links" in first:
+            return self.paginate("/rest/api/content/{0}/child/page".format(page_id),
+                                 query={"limit": limit}, first=first)
+        # Older servers omit links; respect their effective response limit.
+        items = list(first.get("results", []))
+        batch = items
+        effective = max(1, int(first.get("limit") or limit))
+        seen_batches = set()
+        while len(batch) >= effective:
+            fingerprint = json.dumps(batch, sort_keys=True)
+            if fingerprint in seen_batches:
+                raise self.error_cls("Server repeated a pagination batch without advancing.")
+            seen_batches.add(fingerprint)
+            result = self.get_child_pages(page_id, limit=effective, start=len(items))
+            batch = result.get("results", [])
+            items.extend(batch)
+        return items
 
-        while True:
-            result = self.get_child_pages(page_id, limit=limit, start=start)
-            batch = result.get("results", []) if isinstance(result, dict) else []
-            if not batch:
-                break
-            pages.extend(batch)
+    def list_child_pages_with_content(self, page_id: str) -> list[Dict[str, Any]]:
+        return self.paginate("/rest/api/content/{0}/child/page".format(page_id),
+                             query={"limit": 100, "expand": "body.storage,version,space,ancestors"})
 
-            batch_size = len(batch)
-            if batch_size < limit:
-                break
-            start += batch_size
-
-        return pages
 
     def create_page(
         self,
@@ -547,26 +625,27 @@ class ConfluenceClient(BaseAtlassianClient):
         *,
         limit: int = 200,
     ) -> list[Dict[str, Any]]:
-        comments: list[Dict[str, Any]] = []
-        start = 0
+        if limit <= 0:
+            raise self.error_cls("limit must be positive")
+        first = self.get_inline_comments(page_id, limit=limit, start=0)
+        if "_links" in first:
+            return self.paginate("/rest/api/content/{0}/child/comment".format(page_id),
+                                 query={"limit": limit, "location": "inline"}, first=first)
+        # Older servers omit links; respect their effective response limit.
+        items = list(first.get("results", []))
+        batch = items
+        effective = max(1, int(first.get("limit") or limit))
+        seen_batches = set()
+        while len(batch) >= effective:
+            fingerprint = json.dumps(batch, sort_keys=True)
+            if fingerprint in seen_batches:
+                raise self.error_cls("Server repeated a pagination batch without advancing.")
+            seen_batches.add(fingerprint)
+            result = self.get_inline_comments(page_id, limit=effective, start=len(items))
+            batch = result.get("results", [])
+            items.extend(batch)
+        return items
 
-        while True:
-            result = self.get_inline_comments(
-                page_id,
-                limit=limit,
-                start=start,
-            )
-            batch = result.get("results", []) if isinstance(result, dict) else []
-            if not batch:
-                break
-            comments.extend(batch)
-
-            batch_size = len(batch)
-            if batch_size < limit:
-                break
-            start += batch_size
-
-        return comments
 
     def get_footer_comments(
         self,
@@ -594,26 +673,27 @@ class ConfluenceClient(BaseAtlassianClient):
         *,
         limit: int = 200,
     ) -> list[Dict[str, Any]]:
-        comments: list[Dict[str, Any]] = []
-        start = 0
+        if limit <= 0:
+            raise self.error_cls("limit must be positive")
+        first = self.get_footer_comments(page_id, limit=limit, start=0)
+        if "_links" in first:
+            return self.paginate("/rest/api/content/{0}/child/comment".format(page_id),
+                                 query={"limit": limit, "location": "footer"}, first=first)
+        # Older servers omit links; respect their effective response limit.
+        items = list(first.get("results", []))
+        batch = items
+        effective = max(1, int(first.get("limit") or limit))
+        seen_batches = set()
+        while len(batch) >= effective:
+            fingerprint = json.dumps(batch, sort_keys=True)
+            if fingerprint in seen_batches:
+                raise self.error_cls("Server repeated a pagination batch without advancing.")
+            seen_batches.add(fingerprint)
+            result = self.get_footer_comments(page_id, limit=effective, start=len(items))
+            batch = result.get("results", [])
+            items.extend(batch)
+        return items
 
-        while True:
-            result = self.get_footer_comments(
-                page_id,
-                limit=limit,
-                start=start,
-            )
-            batch = result.get("results", []) if isinstance(result, dict) else []
-            if not batch:
-                break
-            comments.extend(batch)
-
-            batch_size = len(batch)
-            if batch_size < limit:
-                break
-            start += batch_size
-
-        return comments
 
     def get_attachments(
         self,
@@ -621,11 +701,8 @@ class ConfluenceClient(BaseAtlassianClient):
         *,
         limit: int = 1000,
     ) -> Dict[str, Any]:
-        return self.request(
-            "GET",
-            "/rest/api/content/{0}/child/attachment".format(page_id),
-            query={"limit": limit},
-        )
+        items = self.paginate("/rest/api/content/{0}/child/attachment".format(page_id), query={"limit": limit})
+        return {"results": items, "size": len(items)}
 
     def upload_attachment(
         self,
@@ -788,14 +865,11 @@ class JiraClient(BaseAtlassianClient):
     error_cls = JiraError
 
     def auth_check(self) -> Dict[str, Any]:
-        data = self.request("GET", "/rest/api/2/serverInfo")
-        return {
-            "base_url": self.base_url,
-            "authenticated": True,
-            "version": data.get("version"),
-            "build_number": data.get("buildNumber"),
-            "deployment_type": data.get("deploymentType"),
-        }
+        user = self.request("GET", "/rest/api/2/myself")
+        if not isinstance(user, dict) or not (user.get("name") or user.get("key") or user.get("accountId")):
+            raise self.error_cls("Authentication check did not return an authenticated user.")
+        return {"base_url": self.base_url, "authenticated": True,
+                "username": user.get("name"), "display_name": user.get("displayName")}
 
     def get_issue(
         self,
@@ -848,15 +922,9 @@ class JiraClient(BaseAtlassianClient):
         description: Optional[str] = None,
         extra_fields: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        fields: Dict[str, Any] = {
-            "project": {"key": project_key},
-            "summary": summary,
-            "issuetype": {"name": issue_type_name},
-        }
-        if description is not None:
-            fields["description"] = description
-        if extra_fields:
-            fields.update(extra_fields)
+        fields = build_issue_fields(project_key=project_key, summary=summary,
+                                    issue_type_name=issue_type_name, description=description,
+                                    extra_fields=extra_fields)
         payload = {"fields": fields}
         return self.request("POST", "/rest/api/2/issue", body=payload)
 

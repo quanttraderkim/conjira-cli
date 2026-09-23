@@ -11,3 +11,6 @@ local/*.local.md
 local/*.private.md
 local/exports/
 .tmp-venv*/
+.ruff_cache/
+.coverage
+htmlcov/

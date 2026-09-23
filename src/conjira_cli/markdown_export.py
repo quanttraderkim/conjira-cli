@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import html
 import re
+import uuid
+from conjira_cli.files import stamp_export
 import urllib.parse
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -122,6 +124,15 @@ class MarkdownExporter:
     base_url: str
     page_id: str
     mermaid_macro_name: str | None = None
+    strict: bool = False
+    warnings: list[dict[str, str]] = field(default_factory=list, init=False)
+
+    def _warn(self, code: str, detail: str) -> None:
+        warning = {"code": code, "detail": detail}
+        if warning not in self.warnings:
+            self.warnings.append(warning)
+        if self.strict:
+            raise ValueError("Strict conversion stopped: " + detail)
 
     def convert_page(self, page: dict[str, Any]) -> str:
         title = page.get("title") or "Untitled"
@@ -163,7 +174,7 @@ class MarkdownExporter:
             "",
             ]
         )
-        return "\n".join(parts)
+        return stamp_export("\n".join(parts), self.base_url)
 
     def _render_hub_page(self, children: list[dict[str, Any]]) -> str:
         lines = [
@@ -186,15 +197,37 @@ class MarkdownExporter:
 
     def convert_fragment(self, body_html: str) -> str:
         wrapped = (
-            '<root xmlns:ac="urn:ac" xmlns:ri="urn:ri">'
+            '<root xmlns:ac="urn:ac" xmlns:ri="urn:ri" xmlns:atlassian="urn:atlassian">'
             + body_html
             + "</root>"
         )
         try:
             root = ET.fromstring(wrapped)
+            supported = {"toc", "status", "code", "mathblock", *_CALLOUT_MACRO_NAMES}
+            if self.mermaid_macro_name:
+                supported.add(self.mermaid_macro_name)
+            for node in root.iter():
+                if _local_name(node.tag) == "structured-macro" and node.attrib.get("{urn:ac}name") not in supported:
+                    self._warn("unsupported_macro", "Macro may lose presentation or parameters: " + str(node.attrib.get("{urn:ac}name")))
+                if any(node.attrib.get(key, "1") != "1" for key in ("rowspan", "colspan")):
+                    self._warn("merged_cells", "Merged table cells cannot round-trip exactly through Markdown.")
             rendered = self._render_blocks(list(root), indent=0)
-            return _clean_text(self._postprocess_markdown(rendered)) + "\n"
+            # Preserve literal blocks, including their whitespace and entities,
+            # before applying prose formatting. Prefixes include nested lists/callouts.
+            literals: dict[str, str] = {}
+            marker = "conjira-literal-" + uuid.uuid4().hex
+            def stash(match):
+                key = marker + str(len(literals)) + "-end"
+                literals[key] = match.group(0)
+                return key
+            protected = re.sub(r"(?ms)^([ \t>]*)(`{3,}|~{3,})[^\n]*\n.*?^\1\2[ \t]*(?=\n|$)", stash, rendered)
+            protected = re.sub(r"(`+)[^\n]*?\1", stash, protected)
+            result = _clean_text(self._postprocess_markdown(protected))
+            for key, literal in literals.items():
+                result = result.replace(key, literal)
+            return result + "\n"
         except ET.ParseError:
+            self._warn("invalid_storage", "Storage could not be parsed; fallback export may omit content.")
             return _clean_text(re.sub(r"<[^>]+>", "", body_html)) + "\n"
 
     def _render_blocks(self, elements: list[ET.Element], *, indent: int) -> str:
@@ -240,8 +273,8 @@ class MarkdownExporter:
         if name == "table":
             return self._render_table(elem) + "\n\n"
         if name == "pre":
-            text = "".join(elem.itertext()).strip("\n")
-            return f"```\n{text}\n```\n\n" if text else ""
+            text = "".join(elem.itertext())
+            return self._fenced(text, "") if text else ""
         if name == "image":
             return self._render_image(elem)
         if name in {"div", "tbody", "thead", "tfoot", "colgroup", "tr"}:
@@ -536,9 +569,15 @@ class MarkdownExporter:
         return "plain-text-body" in child_names and "rich-text-body" not in child_names
 
     def _render_fenced_macro(self, elem: ET.Element, language: str) -> str:
-        text = self._extract_macro_plain_text_body(elem).strip("\n")
+        text = self._extract_macro_plain_text_body(elem)
         fence_language = "" if language.strip().lower() in {"", "none"} else language.strip()
-        return f"```{fence_language}\n{text}\n```\n\n"
+        return self._fenced(text, fence_language)
+
+    @staticmethod
+    def _fenced(text: str, language: str) -> str:
+        longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+        fence = "`" * max(3, longest + 1)
+        return f"{fence}{language}\n{text}\n{fence}\n\n"
 
     def _render_callout_macro(self, elem: ET.Element, macro_name: str) -> str:
         title = self._extract_macro_parameter(elem, "title")

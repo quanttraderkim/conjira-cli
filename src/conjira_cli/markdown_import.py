@@ -66,7 +66,9 @@ def _ensure_xhtml_self_closing(html_str: str) -> str:
             attrs = attrs[:-1].rstrip()
         return f"<{tag}{attrs} />"
 
-    return _VOID_TAG_RE.sub(_fix, html_str)
+    # CDATA contains literal source, not XHTML tags.
+    return "".join(part if part.startswith("<![CDATA[") else _VOID_TAG_RE.sub(_fix, part)
+                   for part in re.split(r"(<!\[CDATA\[.*?\]\]>)", html_str, flags=re.DOTALL))
 
 
 def _strip_frontmatter(markdown: str) -> str:
@@ -148,12 +150,12 @@ def _parse_fenced_code(
     mermaid_macro_name: Optional[str] = None,
 ) -> tuple[str, int]:
     opening = lines[start].strip()
-    fence = opening[:3]
-    language = opening[3:].strip() or "none"
+    fence = re.match(r"`{3,}", opening).group(0)
+    language = opening[len(fence):].strip() or "none"
     code_lines: list[str] = []
     i = start + 1
     while i < len(lines):
-        if lines[i].strip().startswith(fence):
+        if re.fullmatch(r"`{" + str(len(fence)) + r",}\s*", lines[i].strip()):
             return _render_fenced_block(
                 code="\n".join(code_lines),
                 language=language,
@@ -369,14 +371,14 @@ def _parse_nested_fenced_code(
     mermaid_macro_name: Optional[str],
 ) -> tuple[str, int]:
     """Parse a fenced block indented under a list item, dedenting it by the fence indent."""
-    fence = lines[start].strip()[:3]
+    fence = re.match(r"`{3,}", lines[start].strip()).group(0)
     dedented: list[str] = []
     i = start
     while i < len(lines):
         line = lines[i]
         dedented.append(line[fence_indent:] if line[:fence_indent].strip() == "" else line.lstrip())
         i += 1
-        if i - 1 > start and line.strip().startswith(fence):
+        if i - 1 > start and re.fullmatch(r"`{" + str(len(fence)) + r",}\s*", line.strip()):
             break
     block_html, _ = _parse_fenced_code(dedented, 0, mermaid_macro_name=mermaid_macro_name)
     return block_html, i

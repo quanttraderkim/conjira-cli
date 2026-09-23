@@ -12,6 +12,12 @@ Release notes for maintainers: [docs/RELEASING.md](docs/RELEASING.md)
 
 You do not need to be a Python developer to get value from this repository. If you already use a local coding agent or another shell-capable AI tool, you can hand the repo to the agent, point it at your local `agent.env`, and ask for tasks like “export this Confluence page to Markdown”, “refresh this stale wiki note”, or “search Jira for issues created this week”. The agent can read this README, follow `docs/AGENT_USAGE.md`, and run the CLI for you.
 
+## New in 0.3.0
+
+MCP is now available through `pipx install 'conjira-cli[mcp]'` and the `conjira-mcp` entrypoint (Python 3.10+). All 31 canonical CLI commands are exposed as typed MCP tools, with stdio and authenticated HTTP transports. See [MCP setup and examples](docs/MCP.md), [release notes and migration](docs/CHANGELOG.md), and `conjira --version` / `conjira doctor`.
+
+This release adds heading discovery, exact edit diffs and version guards, parallel batch reads, complete paginated searches, Jira field updates and status transitions. It also fixes nine reviewed correctness/safety problems and protects local exports with page identity, change detection, and backups.
+
 ## The problem this solves
 
 If your team uses self-hosted Confluence and Jira, official cloud-native connectors are often not enough. You still have the REST APIs, but the missing piece is usually a reusable local tool that makes those APIs easy to use from a shell or from local coding agents.
