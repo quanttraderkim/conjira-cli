@@ -125,4 +125,4 @@ class SetupMacOSTests(unittest.TestCase):
 
     def test_completion_hint_uses_explicit_env_file_for_non_default_path(self) -> None:
         hint = completion_hint(Path("/tmp/custom.env"))
-        self.assertEqual(hint, "Try: conjira --env-file /tmp/custom.env auth-check")
+        self.assertEqual(hint, f"Try: conjira --env-file {Path('/tmp/custom.env')} auth-check")

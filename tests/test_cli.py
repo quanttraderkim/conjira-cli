@@ -259,7 +259,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["page_id"], "12345")
         self.assertEqual(payload["title"], "Guide")
         self.assertEqual(payload["exported_count"], 1)
-        self.assertEqual(payload["root_output_dir"], "/tmp/conjira-staging/Guide")
+        self.assertEqual(Path(payload["root_output_dir"]), Path("/tmp/conjira-staging/Guide"))
         self.assertTrue(payload["used_staging_local"])
         mock_get_page.assert_called_once_with("12345", expand="body.storage,version,space,ancestors")
         mock_export_tree.assert_called_once()

@@ -315,7 +315,7 @@ class ClientTests(unittest.TestCase):
         )
 
         with mock.patch(
-            "conjira_cli.client.urllib.request.urlopen",
+            "conjira_cli.client.BaseAtlassianClient._open",
             side_effect=[
                 _http_error(429, headers={"Retry-After": "2"}),
                 _FakeHTTPResponse('{"id":"123"}', content_type="application/json"),
@@ -338,7 +338,7 @@ class ClientTests(unittest.TestCase):
         )
 
         with mock.patch(
-            "conjira_cli.client.urllib.request.urlopen",
+            "conjira_cli.client.BaseAtlassianClient._open",
             side_effect=[
                 _http_error(429, body='{"message":"slow down"}'),
                 _http_error(429, body='{"message":"still slow"}'),
@@ -400,7 +400,7 @@ class ValidateStorageHtmlTests(unittest.TestCase):
         )
 
         with mock.patch(
-            "conjira_cli.client.urllib.request.urlopen",
+            "conjira_cli.client.BaseAtlassianClient._open",
             return_value=_FakeHTTPResponse(body, content_type="text/plain; charset=utf-8"),
         ):
             page = client.get_page("123")
@@ -410,13 +410,13 @@ class ValidateStorageHtmlTests(unittest.TestCase):
 
     def test_jira_auth_check_parses_json_even_when_content_type_is_not_json(self) -> None:
         client = JiraClient(base_url="https://jira.example.com", token="token")
-        body = '{"version":"10.3.16","buildNumber":10030016,"deploymentType":"Server"}'
+        body = '{"name":"reviewer","displayName":"Reviewer"}'
 
         with mock.patch(
-            "conjira_cli.client.urllib.request.urlopen",
+            "conjira_cli.client.BaseAtlassianClient._open",
             return_value=_FakeHTTPResponse(body, content_type="text/plain; charset=utf-8"),
         ):
             payload = client.auth_check()
 
-        self.assertEqual(payload["version"], "10.3.16")
-        self.assertEqual(payload["build_number"], 10030016)
+        self.assertEqual(payload["username"], "reviewer")
+        self.assertTrue(payload["authenticated"])

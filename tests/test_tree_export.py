@@ -45,8 +45,8 @@ class TreeExportTests(unittest.TestCase):
                 base_url="https://confluence.example.com",
             )
 
-            root_index = Path(tmp_dir) / "Root Page" / "index.md"
-            child_index = Path(tmp_dir) / "Root Page" / "Child Page" / "index.md"
+            root_index = Path(tmp_dir) / "Root Page--1" / "index.md"
+            child_index = Path(tmp_dir) / "Root Page--1" / "Child Page--2" / "index.md"
 
             self.assertTrue(root_index.exists())
             self.assertTrue(child_index.exists())

@@ -4,7 +4,11 @@ on:
   workflow_dispatch:
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: verify
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +28,14 @@ jobs:
 
       - name: Validate distribution metadata
         run: python -m twine check dist/*
+
+      - name: Install and test the built wheel
+        run: |
+          python -m venv /tmp/conjira-wheel-check
+          /tmp/conjira-wheel-check/bin/python -m pip install "$(ls dist/*.whl)[mcp]"
+          /tmp/conjira-wheel-check/bin/conjira --version
+          /tmp/conjira-wheel-check/bin/conjira-mcp --version
+          /tmp/conjira-wheel-check/bin/python -m unittest discover -s tests -v
 
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@v4

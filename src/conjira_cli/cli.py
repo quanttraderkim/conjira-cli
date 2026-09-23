@@ -9,17 +9,22 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from conjira_cli import __version__
+from conjira_cli.operations import batch_read, snapshot_guard, change_details, heading_payload, search_results
 from conjira_cli.client import (
     ConfluenceClient,
     ConfluenceError,
     JiraClient,
     JiraError,
+    build_issue_fields,
+    validate_storage_html,
 )
 from conjira_cli.config import (
     ConfigError,
     build_confluence_settings,
     build_jira_settings,
 )
+from conjira_cli.files import atomic_write, metadata as export_metadata, validate_source, write_export
 from conjira_cli.inline_comments import render_inline_comment_summary_markdown
 from conjira_cli.markdown_export import MarkdownExporter
 from conjira_cli.markdown_import import markdown_to_storage_html
@@ -28,7 +33,7 @@ from conjira_cli.section_edit import (
     insert_after_heading_html,
     replace_section_html,
 )
-from conjira_cli.tree_export import export_page_tree, sanitize_path_component
+from conjira_cli.tree_export import export_page_tree
 
 _JIRA_SUMMARY_FIELDS = [
     "summary",
@@ -52,7 +57,10 @@ def _read_text_arg(raw_text: Optional[str], file_path: Optional[str]) -> str:
 def _normalize_id(value: str) -> str:
     # Strip whitespace and trailing slashes so URL-derived IDs like
     # "1025003939/" (from a pasted Confluence URL) don't break path joins.
-    return value.strip().strip("/")
+    normalized = value.strip().strip("/")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", normalized):
+        raise argparse.ArgumentTypeError("Use a page ID or issue key, not a URL or path.")
+    return normalized
 
 
 def _read_json_arg(raw_json: Optional[str], file_path: Optional[str]) -> Dict[str, Any]:
@@ -171,6 +179,7 @@ def _page_navigation_payload(
     *,
     page: Dict[str, Any],
     child_pages: list[Dict[str, Any]],
+    children_loaded: bool = True,
 ) -> Dict[str, Any]:
     body_html = _page_body_html(page)
     body_is_effectively_empty = _is_effectively_empty_body(body_html)
@@ -183,7 +192,8 @@ def _page_navigation_payload(
     payload: Dict[str, Any] = {
         "page_kind": page_kind,
         "body_is_effectively_empty": body_is_effectively_empty,
-        "child_count": len(child_summaries),
+        "child_count": len(child_summaries) if children_loaded else None,
+        "children_loaded": children_loaded,
     }
     if child_summaries:
         payload["children"] = child_summaries
@@ -295,6 +305,7 @@ def _resolve_export_output_path(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="conjira")
+    parser.add_argument("--version", action="version", version="conjira " + __version__)
     parser.add_argument("--base-url")
     parser.add_argument("--token")
     parser.add_argument("--token-file")
@@ -306,11 +317,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    subparsers.add_parser("doctor", help="Show version and configuration sources without reading secrets")
     subparsers.add_parser("auth-check", help="Validate Confluence base URL and PAT")
 
     get_page = subparsers.add_parser("get-page", help="Fetch a Confluence page by ID")
     get_page.add_argument("--page-id", required=True, type=_normalize_id)
     get_page.add_argument("--expand")
+    get_page.add_argument("--include-children", action="store_true")
 
     export_page_md = subparsers.add_parser(
         "export-page-md",
@@ -321,6 +334,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export_page_md.add_argument("--output-dir")
     export_page_md.add_argument("--filename")
     export_page_md.add_argument("--staging-local", action="store_true")
+    export_page_md.add_argument("--force", action="store_true")
 
     export_tree_md = subparsers.add_parser(
         "export-tree-md",
@@ -329,6 +343,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export_tree_md.add_argument("--page-id", required=True, type=_normalize_id)
     export_tree_md.add_argument("--output-dir")
     export_tree_md.add_argument("--staging-local", action="store_true")
+    export_tree_md.add_argument("--force", action="store_true")
 
     check_page_md_freshness = subparsers.add_parser(
         "check-page-md-freshness",
@@ -341,6 +356,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Refresh an exported Markdown file from the current Confluence page",
     )
     refresh_page_md.add_argument("--file", required=True)
+    refresh_page_md.add_argument("--force", action="store_true", help="Overwrite local edits after creating a backup")
 
     get_inline_comments = subparsers.add_parser(
         "get-inline-comments",
@@ -359,7 +375,7 @@ def _build_parser() -> argparse.ArgumentParser:
         aliases=["get-page-comments"],
         help="Fetch Confluence page footer comments, including replies",
     )
-    get_footer_comments.add_argument("--page-id", required=True)
+    get_footer_comments.add_argument("--page-id", required=True, type=_normalize_id)
     get_footer_comments.add_argument("--limit", type=int, default=200)
 
     export_inline_comments_md = subparsers.add_parser(
@@ -380,7 +396,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     create_page = subparsers.add_parser("create-page", help="Create a new Confluence page")
     create_page.add_argument("--space-key", required=True)
-    create_page.add_argument("--parent-id")
+    create_page.add_argument("--parent-id", type=_normalize_id)
     create_page.add_argument("--title", required=True)
     create_page.add_argument("--allow-write", action="store_true")
     create_page.add_argument("--dry-run", action="store_true")
@@ -441,7 +457,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Move an existing Confluence page under a different parent page",
     )
     move_page.add_argument("--page-id", required=True, type=_normalize_id)
-    move_page.add_argument("--new-parent-id", required=True)
+    move_page.add_argument("--new-parent-id", required=True, type=_normalize_id)
     move_page.add_argument("--allow-write", action="store_true")
     move_page.add_argument("--dry-run", action="store_true")
 
@@ -509,6 +525,38 @@ def _build_parser() -> argparse.ArgumentParser:
     jira_comment_group.add_argument("--body")
     jira_comment_group.add_argument("--body-file")
 
+    for command, help_text in [("list-headings", "List page headings and duplicate occurrences"),
+                               ("get-page-markdown", "Read a page as Markdown without writing a file"),
+                               ("list-attachments", "List all page attachments")]:
+        child = subparsers.add_parser(command, help=help_text)
+        child.add_argument("--page-id", required=True, type=_normalize_id)
+    for command, id_flag in [("get-pages", "--page-ids"), ("jira-get-issues", "--issue-keys")]:
+        child = subparsers.add_parser(command, help="Read multiple objects with bounded concurrency and per-item results")
+        child.add_argument(id_flag, required=True)
+        child.add_argument("--workers", type=int, default=4)
+    for child in [update_page, replace_section, insert_after_heading, move_page]:
+        child.add_argument("--expected-version", type=int, help="Reject writes when the live version differs")
+        child.add_argument("--expected-body-sha256", help="Body digest returned by a previous dry-run")
+    for child in [replace_section, insert_after_heading]:
+        child.add_argument("--heading-occurrence", type=int, help="1-based occurrence from list-headings")
+    for child in [confluence_search, jira_search]:
+        child.add_argument("--all", action="store_true", help="Fetch all pages up to max-items")
+        child.add_argument("--max-items", type=int, default=1000)
+    for child in [export_page_md, export_tree_md]:
+        child.add_argument("--strict", action="store_true", help="Reject unsupported conversion constructs")
+    transitions = subparsers.add_parser("jira-transitions", help="List available issue status transitions")
+    transitions.add_argument("--issue-key", required=True, type=_normalize_id)
+    for command in ["jira-update-issue", "jira-transition-issue"]:
+        child = subparsers.add_parser(command, help="Update issue fields" if command == "jira-update-issue" else "Perform an available status transition")
+        child.add_argument("--issue-key", required=True, type=_normalize_id)
+        child.add_argument("--allow-write", action="store_true")
+        child.add_argument("--dry-run", action="store_true")
+        if command == "jira-update-issue":
+            group = child.add_mutually_exclusive_group(required=True)
+            group.add_argument("--fields-json")
+            group.add_argument("--fields-file")
+        else:
+            child.add_argument("--transition-id", required=True)
     return parser
 
 
@@ -620,6 +668,7 @@ def _confluence_update_preview(
     if append_html:
         resulting_body += append_html
 
+    validate_storage_html(resulting_body)
     next_title = new_title or current_summary.get("title")
     return {
         "dry_run": True,
@@ -639,6 +688,7 @@ def _confluence_update_preview(
         "current_body_length": len(current_body),
         "next_body_length": len(resulting_body),
         "body_preview": _preview_html(resulting_body),
+        **change_details(page, resulting_body),
     }
 
 
@@ -665,6 +715,7 @@ def _confluence_replace_section_preview(
         "old_section_preview": _preview_html(result.old_section_html),
         "new_section_preview": _preview_html(result.new_section_html),
         "resulting_body_preview": _preview_html(result.updated_body_html),
+        **change_details(page, result.updated_body_html),
     }
 
 
@@ -690,6 +741,7 @@ def _confluence_insert_after_heading_preview(
         "inserted_after_heading": True,
         "inserted_block_preview": _preview_html(result.inserted_html),
         "resulting_body_preview": _preview_html(result.updated_body_html),
+        **change_details(page, result.updated_body_html),
     }
 
 
@@ -713,6 +765,7 @@ def _confluence_move_page_preview(
         "current_parent_id": current_parent,
         "new_parent_id": new_parent_id,
         "parent_changed": current_parent != new_parent_id,
+        **change_details(page, _page_body_html(page)),
     }
 
 
@@ -923,8 +976,8 @@ def _build_error_payload(exc: Exception) -> Dict[str, Any]:
     return error_payload
 
 
-def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
-    settings = build_confluence_settings(
+def _handle_confluence(args: argparse.Namespace, *, settings=None, client=None, check_output_path=None) -> Dict[str, Any]:
+    settings = settings or build_confluence_settings(
         base_url=args.base_url,
         token=args.token,
         token_file=args.token_file,
@@ -933,7 +986,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         timeout_seconds=args.timeout,
         env_file=args.env_file,
     )
-    client = ConfluenceClient(
+    client = client or ConfluenceClient(
         base_url=settings.base_url,
         token=settings.token,
         timeout_seconds=settings.timeout_seconds,
@@ -945,45 +998,66 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
         retry_max_seconds=settings.retry_max_seconds,
     )
 
+    if args.command == "list-headings":
+        return heading_payload(client.get_page(args.page_id, expand="body.storage,version"))
+    if args.command == "get-page-markdown":
+        page = client.get_page(args.page_id, expand="body.storage,version,space")
+        exporter = MarkdownExporter(settings.base_url, args.page_id, settings.mermaid_macro_name)
+        return {**client.summarize_page(page), "markdown": exporter.convert_page(_page_export_payload(page)),
+                "warnings": exporter.warnings}
+    if args.command == "list-attachments":
+        result = client.get_attachments(args.page_id)
+        return {"results": [client.summarize_attachment(item) for item in result["results"]], "count": len(result["results"])}
+    if args.command == "get-pages":
+        return batch_read(args.page_ids, lambda key: client.get_page(_normalize_id(key), expand="body.storage,version,space"), args.workers)
     if args.command == "auth-check":
         return client.auth_check()
     if args.command == "get-page":
         expand = _merge_csv_fields(args.expand, ["body.storage", "version", "space"])
         page = client.get_page(args.page_id, expand=expand)
-        child_pages = client.list_child_pages(args.page_id)
+        children_loaded = _is_effectively_empty_body(_page_body_html(page)) or getattr(args, "include_children", False)
+        child_pages = client.list_child_pages(args.page_id) if children_loaded else []
         payload = client.summarize_page(page)
-        payload.update(_page_navigation_payload(page=page, child_pages=child_pages))
+        payload.update(_page_navigation_payload(page=page, child_pages=child_pages, children_loaded=children_loaded))
         if args.expand and "body.storage" in args.expand:
             payload["body_html"] = _page_body_html(page)
         return payload
     if args.command == "export-page-md":
         page = client.get_page(args.page_id, expand="body.storage,version,space")
-        child_pages = client.list_child_pages(args.page_id)
+        snapshot_guard(page, args)
+        if args.command in {"update-page", "replace-section", "insert-after-heading", "move-page"} and settings.allowed_space_keys is not None and (page.get("space") or {}).get("key") not in settings.allowed_space_keys:
+            raise ConfigError("Write blocked: page space is not in CONFLUENCE_ALLOWED_SPACE_KEYS.")
+        children_loaded = _is_effectively_empty_body(_page_body_html(page)) or getattr(args, "include_children", False)
+        child_pages = client.list_child_pages(args.page_id) if children_loaded else []
         payload = _page_export_payload(page)
-        payload.update(_page_navigation_payload(page=page, child_pages=child_pages))
+        payload.update(_page_navigation_payload(page=page, child_pages=child_pages, children_loaded=children_loaded))
         exporter = MarkdownExporter(
             base_url=settings.base_url,
             page_id=args.page_id,
             mermaid_macro_name=settings.mermaid_macro_name,
+            strict=getattr(args, "strict", False),
         )
         markdown = exporter.convert_page(payload)
         output_path = _resolve_export_output_path(
             title=payload["title"] or "Untitled",
             output_file=args.output_file,
             output_dir=args.output_dir,
-            filename=args.filename,
+            filename=args.filename or (None if args.output_file else _sanitize_markdown_filename(payload["title"] or "Untitled")[:-3] + "--" + args.page_id + ".md"),
             staging_local=args.staging_local,
             default_dir=settings.export_default_dir,
             staging_dir=settings.export_staging_dir,
         )
+        if check_output_path:
+            check_output_path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(markdown, encoding="utf-8")
+        write_export(output_path, markdown, page_id=args.page_id, base_url=settings.base_url, force=getattr(args, "force", False))
         return {
             "page_id": args.page_id,
             "title": payload["title"],
             "output_file": str(output_path),
             "source_url": payload["webui_url"],
             "page_kind": payload["page_kind"],
+            "warnings": exporter.warnings,
             "child_count": payload["child_count"],
             "hub_generated": payload["page_kind"] == "hub",
             "used_staging_local": str(output_path).startswith(
@@ -1020,11 +1094,14 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             fetch_page=lambda page_id: _page_export_payload(
                 client.get_page(page_id, expand="body.storage,version,space,ancestors")
             ),
-            list_child_pages=client.list_child_pages,
+            list_child_pages=lambda page_id: [_page_export_payload(item) if "storage" in (item.get("body") or {}) else item for item in client.list_child_pages_with_content(page_id)],
             base_url=settings.base_url,
             mermaid_macro_name=settings.mermaid_macro_name,
+            force=getattr(args, "force", False),
+            strict=getattr(args, "strict", False),
+            check_output_path=check_output_path,
         )
-        root_dir = str(output_base / sanitize_path_component(root_payload["title"] or "Untitled"))
+        root_dir = str(Path(exported[0].output_file).parent)
         return {
             "page_id": args.page_id,
             "title": root_payload["title"],
@@ -1037,6 +1114,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
                     "output_file": item.output_file,
                     "source_url": item.source_url,
                     "parent_page_id": item.parent_page_id,
+                    "warnings": getattr(item, "warnings", []),
                 }
                 for item in exported
             ],
@@ -1047,6 +1125,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
     if args.command == "check-page-md-freshness":
         file_path = Path(args.file)
         metadata = _read_export_metadata(file_path)
+        validate_source(export_metadata(file_path.read_text(encoding="utf-8")), settings.base_url)
         page = client.get_page(str(metadata["page_id"]), expand="version,space")
         remote_summary = client.summarize_page(page)
         remote_version = remote_summary.get("version")
@@ -1058,13 +1137,14 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             "local_version": local_version,
             "remote_version": remote_version,
             "is_stale": (
-                False if local_version is None or remote_version is None else local_version < remote_version
+                None if local_version is None or remote_version is None else local_version < remote_version
             ),
             "source_url": remote_summary.get("webui_url") or metadata.get("source_url"),
         }
     if args.command == "refresh-page-md":
         file_path = Path(args.file)
         metadata = _read_export_metadata(file_path)
+        validate_source(export_metadata(file_path.read_text(encoding="utf-8")), settings.base_url)
         page = client.get_page(str(metadata["page_id"]), expand="body.storage,version,space")
         payload = client.summarize_page(page)
         payload["body_html"] = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
@@ -1074,7 +1154,9 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             mermaid_macro_name=settings.mermaid_macro_name,
         )
         markdown = exporter.convert_page(payload)
-        file_path.write_text(markdown, encoding="utf-8")
+        if check_output_path:
+            check_output_path(file_path)
+        backup = write_export(file_path, markdown, page_id=str(metadata["page_id"]), base_url=settings.base_url, force=getattr(args, "force", False))
         return {
             "file": str(file_path),
             "page_id": str(metadata["page_id"]),
@@ -1082,6 +1164,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             "version": payload["version"],
             "source_url": payload["webui_url"],
             "refreshed": True,
+            "backup_file": backup,
         }
     if args.command == "get-inline-comments":
         page = client.get_page(args.page_id, expand="version,space")
@@ -1125,8 +1208,10 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             default_dir=settings.export_default_dir,
             staging_dir=settings.export_staging_dir,
         )
+        if check_output_path:
+            check_output_path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(markdown, encoding="utf-8")
+        atomic_write(output_path, markdown)
         return {
             "page_id": args.page_id,
             "title": summary["page_title"],
@@ -1159,6 +1244,7 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             raw_markdown=args.body_markdown,
             markdown_file=args.body_markdown_file,
         )
+        validate_storage_html(body_html)
         if args.dry_run:
             return _confluence_create_preview(
                 space_key=args.space_key,
@@ -1198,8 +1284,11 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             raise ConfigError(
                 "update-page requires at least one of --title, --body-html/--body-file, --body-markdown/--body-markdown-file, --append-html/--append-file, or --append-markdown/--append-markdown-file."
             )
+        page = client.get_page(args.page_id, expand="body.storage,version,space")
+        snapshot_guard(page, args)
+        if args.command in {"update-page", "replace-section", "insert-after-heading", "move-page"} and settings.allowed_space_keys is not None and (page.get("space") or {}).get("key") not in settings.allowed_space_keys:
+            raise ConfigError("Write blocked: page space is not in CONFLUENCE_ALLOWED_SPACE_KEYS.")
         if args.dry_run:
-            page = client.get_page(args.page_id, expand="body.storage,version,space")
             return _confluence_update_preview(
                 page=page,
                 new_title=args.title,
@@ -1218,8 +1307,8 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
                     markdown_file=args.append_markdown_file,
                 ),
             )
-        page = client.update_page(
-            page_id=args.page_id,
+        page = client.update_page_from_snapshot(
+            page,
             new_title=args.title,
             new_body_html=new_body_html,
             append_html=append_html,
@@ -1239,12 +1328,16 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             mermaid_macro_name=settings.mermaid_macro_name,
         )
         page = client.get_page(args.page_id, expand="body.storage,version,space")
+        snapshot_guard(page, args)
+        if args.command in {"update-page", "replace-section", "insert-after-heading", "move-page"} and settings.allowed_space_keys is not None and (page.get("space") or {}).get("key") not in settings.allowed_space_keys:
+            raise ConfigError("Write blocked: page space is not in CONFLUENCE_ALLOWED_SPACE_KEYS.")
         current_body = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
         try:
             replacement = replace_section_html(
                 current_body,
                 heading=args.heading,
                 replacement_html=replacement_html,
+                occurrence=getattr(args, "heading_occurrence", None),
             )
         except SectionEditError as exc:
             raise ConfigError(str(exc)) from exc
@@ -1284,12 +1377,16 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             mermaid_macro_name=settings.mermaid_macro_name,
         )
         page = client.get_page(args.page_id, expand="body.storage,version,space")
+        snapshot_guard(page, args)
+        if args.command in {"update-page", "replace-section", "insert-after-heading", "move-page"} and settings.allowed_space_keys is not None and (page.get("space") or {}).get("key") not in settings.allowed_space_keys:
+            raise ConfigError("Write blocked: page space is not in CONFLUENCE_ALLOWED_SPACE_KEYS.")
         current_body = (((page.get("body") or {}).get("storage") or {}).get("value")) or ""
         try:
             insertion = insert_after_heading_html(
                 current_body,
                 heading=args.heading,
                 inserted_html=inserted_html,
+                occurrence=getattr(args, "heading_occurrence", None),
             )
         except SectionEditError as exc:
             raise ConfigError(str(exc)) from exc
@@ -1328,6 +1425,9 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
                 )
             )
         page = client.get_page(args.page_id, expand="body.storage,version,space,ancestors")
+        snapshot_guard(page, args)
+        if args.command in {"update-page", "replace-section", "insert-after-heading", "move-page"} and settings.allowed_space_keys is not None and (page.get("space") or {}).get("key") not in settings.allowed_space_keys:
+            raise ConfigError("Write blocked: page space is not in CONFLUENCE_ALLOWED_SPACE_KEYS.")
         ancestors = page.get("ancestors") or []
         current_parent = ancestors[-1].get("id") if ancestors else None
         if current_parent == args.new_parent_id:
@@ -1352,6 +1452,10 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             page_id=args.page_id,
             allowed_page_ids=settings.allowed_page_ids,
         )
+        if settings.allowed_space_keys is not None:
+            page = client.get_page(args.page_id, expand="space")
+            if (page.get("space") or {}).get("key") not in settings.allowed_space_keys:
+                raise ConfigError("Write blocked: page space is not in CONFLUENCE_ALLOWED_SPACE_KEYS.")
         file_path = Path(args.file)
         content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
         if args.dry_run:
@@ -1382,18 +1486,12 @@ def _handle_confluence(args: argparse.Namespace) -> Dict[str, Any]:
             return client.summarize_attachment(results[0])
         return {"status": "uploaded", "title": file_path.name}
     if args.command == "search":
-        result = client.search(
-            cql=args.cql,
-            limit=args.limit,
-            start=args.start,
-            expand=args.expand,
-        )
-        return client.summarize_search_results(result.get("results", []))
+        return search_results(args, client)
     raise ConfigError("Unknown Confluence command: {0}".format(args.command))
 
 
-def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
-    settings = build_jira_settings(
+def _handle_jira(args: argparse.Namespace, *, settings=None, client=None) -> Dict[str, Any]:
+    settings = settings or build_jira_settings(
         base_url=args.base_url,
         token=args.token,
         token_file=args.token_file,
@@ -1402,7 +1500,7 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
         timeout_seconds=args.timeout,
         env_file=args.env_file,
     )
-    client = JiraClient(
+    client = client or JiraClient(
         base_url=settings.base_url,
         token=settings.token,
         timeout_seconds=settings.timeout_seconds,
@@ -1414,6 +1512,30 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
         retry_max_seconds=settings.retry_max_seconds,
     )
 
+    if args.command == "jira-get-issues":
+        return batch_read(args.issue_keys, lambda key: client.summarize_issue(client.get_issue(_normalize_id(key))), args.workers)
+    if args.command == "jira-transitions":
+        return client.request("GET", "/rest/api/2/issue/{0}/transitions".format(args.issue_key))
+    if args.command in {"jira-update-issue", "jira-transition-issue"}:
+        _require_write_intent(args.allow_write, args.dry_run)
+        _assert_jira_issue_allowed(issue_key=args.issue_key, allowed_issue_keys=settings.allowed_issue_keys)
+        issue = client.get_issue(args.issue_key, fields="project,summary,status")
+        project_key = ((issue.get("fields") or {}).get("project") or {}).get("key")
+        _assert_jira_project_allowed(project_key=project_key, allowed_project_keys=settings.allowed_project_keys)
+        if args.command == "jira-update-issue":
+            fields = _read_json_arg(args.fields_json, args.fields_file)
+            if not isinstance(fields, dict) or not fields or "project" in fields:
+                raise ConfigError("Provide a nonempty fields object; changing projects is not supported.")
+            body, method, suffix = {"fields": fields}, "PUT", ""
+        else:
+            available = client.request("GET", "/rest/api/2/issue/{0}/transitions".format(args.issue_key))
+            if args.transition_id not in {str(item["id"]) for item in available.get("transitions", [])}:
+                raise ConfigError("Transition is not currently available for this issue.")
+            body, method, suffix = {"transition": {"id": args.transition_id}}, "POST", "/transitions"
+        if args.dry_run:
+            return {"dry_run": True, "issue_key": args.issue_key, "action": args.command, "request": body}
+        client.request(method, "/rest/api/2/issue/" + args.issue_key + suffix, body=body)
+        return {"issue_key": args.issue_key, "action": args.command, "updated": True}
     if args.command == "jira-auth-check":
         return client.auth_check()
     if args.command == "jira-get-issue":
@@ -1432,16 +1554,7 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
             comments_limit=args.comments_limit,
         )
     if args.command == "jira-search":
-        result = client.search(
-            jql=args.jql,
-            limit=args.limit,
-            start=args.start,
-            fields=args.fields,
-            expand=args.expand,
-        )
-        if args.raw:
-            return result
-        return client.summarize_search_results(result.get("issues", []))
+        return search_results(args, client, jira=True)
     if args.command == "jira-get-createmeta":
         result = client.get_createmeta(
             project_key=args.project_key,
@@ -1457,6 +1570,7 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
         )
         description = _read_text_arg(args.description, args.description_file)
         extra_fields = _read_json_arg(args.fields_json, args.fields_file)
+        build_issue_fields(project_key=args.project_key, summary=args.summary, issue_type_name=args.issue_type_name, description=description or None, extra_fields=extra_fields)
         if args.dry_run:
             return _jira_create_issue_preview(
                 client=client,
@@ -1485,6 +1599,9 @@ def _handle_jira(args: argparse.Namespace) -> Dict[str, Any]:
             issue_key=args.issue_key,
             allowed_issue_keys=settings.allowed_issue_keys,
         )
+        if settings.allowed_project_keys is not None:
+            issue = client.get_issue(args.issue_key, fields="project")
+            _assert_jira_project_allowed(project_key=((issue.get("fields") or {}).get("project") or {}).get("key"), allowed_project_keys=settings.allowed_project_keys)
         comment_body = _read_text_arg(args.body, args.body_file)
         if args.dry_run:
             issue = client.get_issue(args.issue_key)
@@ -1510,10 +1627,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        payload = _handle_jira(args) if _is_jira_command(args.command) else _handle_confluence(args)
+        if args.command == "doctor":
+            from conjira_cli.diagnostics import doctor
+            payload = doctor(args.env_file)
+        else:
+            payload = _handle_jira(args) if _is_jira_command(args.command) else _handle_confluence(args)
         _emit(payload, args.output)
         return 0
-    except (ConfigError, ConfluenceError, JiraError, FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+    except (ConfigError, ConfluenceError, JiraError, OSError, ValueError) as exc:
         error_payload = _build_error_payload(exc)
         print(json.dumps(error_payload, ensure_ascii=False, indent=2), file=sys.stderr)
         return 1

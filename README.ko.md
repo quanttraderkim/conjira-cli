@@ -4,13 +4,19 @@
 
 셀프 호스팅 환경의 Confluence와 Jira를 위한 비공식, 에이전트 친화적 CLI입니다.
 
-English version: [README.md](README.md)
+English version: [README.md](https://github.com/quanttraderkim/conjira-cli/blob/main/README.md)
 
-배포 메모: [docs/RELEASING.md](docs/RELEASING.md)
+배포 메모: [docs/RELEASING.md](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/RELEASING.md)
 
 `conjira-cli`는 Confluence와 Jira를 사내 또는 자체 인프라에서 운영하는 팀이 스크립트, 로컬 코딩 에이전트, Markdown 워크플로에서 실용적으로 사용할 수 있도록 만든 작은 Python CLI입니다. 표준 Atlassian REST API를 단순한 명령줄 인터페이스로 감싸고, 로컬 자격 증명 관리를 더 안전하게 하며, 쓰기 작업에는 기본 안전장치를 둡니다.
 
 이 저장소는 꼭 Python 개발자만 쓰는 용도는 아닙니다. 로컬 코딩 에이전트나 셸을 실행할 수 있는 AI 도구를 쓰고 있다면, 이 레포와 `agent.env`를 에이전트에게 주고 “이 Confluence 페이지를 Markdown으로 export해줘”, “오래된 위키 복사본을 최신 상태로 갱신해줘”, “이번 주 생성된 Jira 이슈를 찾아줘”처럼 자연어로 요청해도 됩니다. 에이전트는 이 README와 `docs/AGENT_USAGE.md`를 보고 필요한 CLI 명령을 대신 실행할 수 있습니다.
+
+## 0.3.0에서 달라진 점
+
+`pipx install 'conjira-cli[mcp]'`로 설치하면 `conjira-mcp`를 MCP 서버로 사용할 수 있습니다. MCP는 Python 3.10 이상이 필요하며, CLI는 기존처럼 Python 3.9 이상에서 외부 라이브러리 없이 실행할 수 있습니다. 별칭을 제외한 CLI 명령 31개를 모두 MCP 도구로 제공하고, 표준 입출력 연결과 인증 토큰을 사용하는 HTTP 연결을 지원합니다. [MCP 설정과 사용 예시](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/MCP.md), [배포 내역과 이전 버전 변경사항](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/CHANGELOG.md)을 참고하시면 됩니다.
+
+제목 목록 조회, 변경 전후 비교, 수정 기준 버전 확인, 여러 문서 동시 조회, 검색 결과 전체 조회, Jira 필드 수정과 상태 전환을 추가했습니다. 검토에서 재현된 9개 문제도 수정했으며, 내보낸 문서는 페이지 ID와 수정 여부를 확인하고 덮어쓰기 전에 백업을 남깁니다. `conjira --version`과 `conjira doctor`로 실행 버전과 설정 위치를 확인할 수 있습니다.
 
 ## 어떤 문제를 해결하나요
 
@@ -461,7 +467,7 @@ Markdown 업로드는 Confluence storage HTML로의 best-effort 변환입니다.
 
 ## 에이전트 사용
 
-다른 로컬 코딩 에이전트가 이 프로젝트를 사용해야 한다면 [docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)를 참고하면 됩니다. 이 문서는 같은 머신에서 셸 명령을 실행할 수 있는 에이전트를 기준으로 작성되어 있습니다.
+다른 로컬 코딩 에이전트가 이 프로젝트를 사용해야 한다면 [docs/AGENT_USAGE.md](https://github.com/quanttraderkim/conjira-cli/blob/main/docs/AGENT_USAGE.md)를 참고하면 됩니다. 이 문서는 같은 머신에서 셸 명령을 실행할 수 있는 에이전트를 기준으로 작성되어 있습니다.
 
 ## 라이선스
 
