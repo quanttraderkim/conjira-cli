@@ -298,8 +298,10 @@ class CommandService:
                     self._check_path(target)
                 else:
                     raise ConfigError("Set an output directory inside an MCP root.")
-        return (_handle_jira if jira else _handle_confluence)(
-            args, settings=settings, client=client
+        if jira:
+            return _handle_jira(args, settings=settings, client=client)
+        return _handle_confluence(
+            args, settings=settings, client=client, check_output_path=self._check_path
         )
 
 

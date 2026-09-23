@@ -97,6 +97,28 @@ class McpServiceTests(unittest.TestCase):
         build.assert_called_once()
         self.assertIs(first[1], second[1])
 
+    def test_tree_export_rechecks_generated_paths_inside_roots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, outside = Path(tmp) / "allowed", Path(tmp) / "outside"
+            root.mkdir()
+            outside.mkdir()
+            try:
+                (root / "Demo--1").symlink_to(outside, target_is_directory=True)
+            except OSError:
+                self.skipTest("Symlink creation is unavailable")
+            service = CommandService(roots=[root])
+            settings = ConfluenceSettings("https://wiki.example", "synthetic")
+            client = mock.Mock()
+            client.get_page.return_value = {
+                "id": "1", "title": "Demo", "space": {"key": "DOCS"},
+                "version": {"number": 1}, "body": {"storage": {"value": "<p>Body</p>"}},
+            }
+            client.list_child_pages_with_content.return_value = []
+            with mock.patch.object(service, "_context", return_value=(settings, client)):
+                with self.assertRaisesRegex(ConfigError, "outside configured MCP roots"):
+                    service.execute("confluence_export_tree_md", {"page_id": "1", "output_dir": str(root)})
+            self.assertEqual(list(outside.iterdir()), [])
+
 
 @unittest.skipUnless(HAS_MCP, "Install the optional mcp extra on Python 3.10+")
 class McpProtocolTests(unittest.IsolatedAsyncioTestCase):

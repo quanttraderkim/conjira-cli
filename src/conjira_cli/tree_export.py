@@ -39,6 +39,7 @@ def export_page_tree(
     mermaid_macro_name: str | None = None,
     force: bool = False,
     strict: bool = False,
+    check_output_path: Callable[[Path], None] | None = None,
 ) -> list[ExportedTreePage]:
     exported: list[ExportedTreePage] = []
     visited: set[str] = set()
@@ -50,6 +51,8 @@ def export_page_tree(
             raise ConfigError("Repeated page in tree export: " + page_id)
         visited.add(page_id)
         page_dir = parent_dir / (sanitize_path_component(title)[:120] + "--" + sanitize_path_component(page_id))
+        if check_output_path:
+            check_output_path(page_dir / "index.md")
         page_dir.mkdir(parents=True, exist_ok=True)
 
         page_id = str(page["id"])
@@ -86,6 +89,8 @@ def export_page_tree(
             child_page = child if "body_html" in child else fetch_page(str(child["id"]))
             export_node(child_page, page_dir)
 
+    if check_output_path:
+        check_output_path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     export_node(root_page, output_dir)
     return exported

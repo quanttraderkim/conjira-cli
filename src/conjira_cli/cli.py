@@ -976,7 +976,7 @@ def _build_error_payload(exc: Exception) -> Dict[str, Any]:
     return error_payload
 
 
-def _handle_confluence(args: argparse.Namespace, *, settings=None, client=None) -> Dict[str, Any]:
+def _handle_confluence(args: argparse.Namespace, *, settings=None, client=None, check_output_path=None) -> Dict[str, Any]:
     settings = settings or build_confluence_settings(
         base_url=args.base_url,
         token=args.token,
@@ -1047,6 +1047,8 @@ def _handle_confluence(args: argparse.Namespace, *, settings=None, client=None) 
             default_dir=settings.export_default_dir,
             staging_dir=settings.export_staging_dir,
         )
+        if check_output_path:
+            check_output_path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         write_export(output_path, markdown, page_id=args.page_id, base_url=settings.base_url, force=getattr(args, "force", False))
         return {
@@ -1097,6 +1099,7 @@ def _handle_confluence(args: argparse.Namespace, *, settings=None, client=None) 
             mermaid_macro_name=settings.mermaid_macro_name,
             force=getattr(args, "force", False),
             strict=getattr(args, "strict", False),
+            check_output_path=check_output_path,
         )
         root_dir = str(Path(exported[0].output_file).parent)
         return {
@@ -1151,6 +1154,8 @@ def _handle_confluence(args: argparse.Namespace, *, settings=None, client=None) 
             mermaid_macro_name=settings.mermaid_macro_name,
         )
         markdown = exporter.convert_page(payload)
+        if check_output_path:
+            check_output_path(file_path)
         backup = write_export(file_path, markdown, page_id=str(metadata["page_id"]), base_url=settings.base_url, force=getattr(args, "force", False))
         return {
             "file": str(file_path),
@@ -1203,6 +1208,8 @@ def _handle_confluence(args: argparse.Namespace, *, settings=None, client=None) 
             default_dir=settings.export_default_dir,
             staging_dir=settings.export_staging_dir,
         )
+        if check_output_path:
+            check_output_path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(output_path, markdown)
         return {
