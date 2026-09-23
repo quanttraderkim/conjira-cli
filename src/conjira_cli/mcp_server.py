@@ -106,6 +106,7 @@ def command_catalog():
                     "description": "Jira fields object, or encoded JSON",
                 }
             if action.dest == "dry_run":
+                spec.pop("default", None)
                 spec["description"] = (
                     "Preview only. Defaults to true unless allow_write is explicitly true."
                 )
@@ -237,7 +238,11 @@ class CommandService:
         command = entry["command"]
         arguments = dict(arguments)
         if command in REMOTE_WRITES:
-            if arguments.get("allow_write") and not self.allow_write:
+            if (
+                arguments.get("allow_write")
+                and not arguments.get("dry_run")
+                and not self.allow_write
+            ):
                 raise ConfigError(
                     "MCP writes are disabled. Enable --allow-write at server startup to execute reviewed changes."
                 )

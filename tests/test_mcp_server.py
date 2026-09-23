@@ -67,6 +67,23 @@ class McpServiceTests(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 service._check_path(root / "link" / "a.md")
 
+    def test_explicit_preview_takes_precedence_over_write_flags(self):
+        service = CommandService()
+        schema = service.catalog["confluence_create_page"]["input_schema"]
+        self.assertNotIn("default", schema["properties"]["dry_run"])
+        with mock.patch.object(service, "_context", return_value=(mock.Mock(), mock.Mock())), mock.patch(
+            "conjira_cli.mcp_server._handle_confluence", return_value={"dry_run": True}
+        ) as handle:
+            result = service.execute(
+                "confluence_create_page",
+                {
+                    "space_key": "DOCS", "title": "Preview", "body_html": "<p>Draft</p>",
+                    "allow_write": True, "dry_run": True,
+                },
+            )
+        self.assertTrue(result["dry_run"])
+        self.assertTrue(handle.call_args.args[0].dry_run)
+
     def test_repeated_calls_resolve_credentials_once(self):
         service = CommandService()
         settings = ConfluenceSettings(
